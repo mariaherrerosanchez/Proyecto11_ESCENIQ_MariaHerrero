@@ -1,0 +1,10 @@
+path: datasets/esceniq
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: eggo
+  1: coca_cola
+  2: pepsi
+  3: fedex
+  4: wilson

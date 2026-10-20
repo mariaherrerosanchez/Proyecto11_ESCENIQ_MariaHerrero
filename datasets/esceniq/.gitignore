@@ -1,0 +1,10 @@
+images/*
+!images/*/
+images/*/*
+!images/*/.gitkeep
+labels/*
+!labels/*/
+labels/*/*
+!labels/*/.gitkeep
+manifests/*
+!manifests/.gitkeep
