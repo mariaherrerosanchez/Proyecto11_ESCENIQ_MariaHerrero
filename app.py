@@ -8,6 +8,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from esceniq.video import VideoValidationError, probe_video, temporary_video_file
+from esceniq.vision import InferenceConfig, InferenceError, InferenceMode, analyze_video
 
 MAX_VIDEO_HEIGHT_PX = 480
 MAX_VIDEO_WIDTH_PX = 960
@@ -24,12 +25,20 @@ def player_width(width: int, height: int) -> int:
     return max(1, round(width * scale))
 
 
+def inference_mode_from_label(label: str) -> InferenceMode:
+    return (
+        InferenceMode.ESCENIQ
+        if label == "ESCENIQ (cinco marcas oficiales)"
+        else InferenceMode.TECHNICAL_TEST
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="ESCENIQ · Analizar vídeo", page_icon="◉", layout="wide")
     st.title("ESCENIQ")
     st.caption("Cada aparición cuenta")
     st.header("Analizar vídeo")
-    st.write("Carga un MP4 local para comprobar que puede abrirse y mostrar sus metadatos.")
+    st.write("Carga un MP4 local para validarlo, consultar sus metadatos y ejecutar inferencia local.")
     uploaded_video = st.file_uploader("Vídeo MP4", type=["mp4"], accept_multiple_files=False)
     if uploaded_video is None:
         st.info("Selecciona un vídeo MP4 para comenzar. El archivo no se sube a ningún servicio externo.")
@@ -54,6 +63,50 @@ def main() -> None:
             fps.metric("FPS", f"{metadata.fps:.2f}")
             frames.metric("Fotogramas", f"{metadata.frame_count:,}")
             duration.metric("Duración", format_duration(metadata.duration_seconds))
+            st.subheader("Inferencia YOLO")
+            mode_label = st.radio(
+                "Modo de inferencia",
+                ("Prueba técnica (clases originales del modelo)", "ESCENIQ (cinco marcas oficiales)"),
+                help="La prueba técnica no interpreta clases genéricas como marcas. El modo ESCENIQ exige el catálogo oficial.",
+            )
+            model_path = st.text_input(
+                "Ruta local de los pesos YOLO (.pt)",
+                help="Los pesos permanecen locales. ESCENIQ no descarga modelos automáticamente.",
+            )
+            confidence, sample_interval = st.columns(2)
+            confidence_threshold = confidence.number_input(
+                "Umbral de confianza", min_value=0.0, max_value=1.0, value=0.25, step=0.05
+            )
+            sample_interval_seconds = sample_interval.number_input(
+                "Intervalo de muestreo (segundos)", min_value=0.1, value=1.0, step=0.1
+            )
+            if st.button("Ejecutar inferencia", type="primary"):
+                config = InferenceConfig(
+                    model_path=Path(model_path),
+                    confidence_threshold=float(confidence_threshold),
+                    sample_interval_seconds=float(sample_interval_seconds),
+                    mode=inference_mode_from_label(mode_label),
+                )
+                try:
+                    progress = st.progress(0, text="Preparando inferencia local…")
+
+                    def update_progress(completed: int, total: int) -> None:
+                        percentage = min(100, round(100 * completed / total))
+                        progress.progress(percentage, text=f"Analizando muestra {completed} de {total}…")
+
+                    with st.spinner("Procesando fotogramas localmente…"):
+                        result = analyze_video(temporary_path, config, progress_callback=update_progress)
+                    progress.progress(100, text="Inferencia terminada.")
+                    analyzed, elapsed, detection_count = st.columns(3)
+                    analyzed.metric("Fotogramas analizados", result.analyzed_frame_count)
+                    elapsed.metric("Tiempo de ejecución", f"{result.elapsed_seconds:.2f} s")
+                    detection_count.metric("Detecciones", len(result.detections))
+                    if result.mode is InferenceMode.TECHNICAL_TEST:
+                        st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
+                    elif not result.detections:
+                        st.info("El análisis terminó correctamente sin detecciones.")
+                except InferenceError as error:
+                    st.error(str(error))
     except VideoValidationError as error:
         st.error(str(error))
     except OSError:
