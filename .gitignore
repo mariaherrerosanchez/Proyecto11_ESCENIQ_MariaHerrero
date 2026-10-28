@@ -205,6 +205,15 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Artefactos locales de visión: nunca versionar vídeos, pesos ni ejecuciones.
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.pt
+*.onnx
+runs/
+
 # Ruff stuff:
 .ruff_cache/
 
