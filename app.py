@@ -9,6 +9,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from esceniq.video import VideoValidationError, probe_video, temporary_video_file
 from esceniq.vision import InferenceConfig, InferenceError, InferenceMode, analyze_video
+from esceniq.analytics import ExposureError, calculate_exposure
 
 MAX_VIDEO_HEIGHT_PX = 480
 MAX_VIDEO_WIDTH_PX = 960
@@ -103,9 +104,28 @@ def main() -> None:
                     detection_count.metric("Detecciones", len(result.detections))
                     if result.mode is InferenceMode.TECHNICAL_TEST:
                         st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
-                    elif not result.detections:
-                        st.info("El análisis terminó correctamente sin detecciones.")
-                except InferenceError as error:
+                    else:
+                        exposure = calculate_exposure(result)
+                        if not exposure.metrics:
+                            st.info("El análisis terminó correctamente sin detecciones de marcas.")
+                        else:
+                            st.subheader("Exposición estimada por marca")
+                            st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
+                            st.dataframe(
+                                [
+                                    {
+                                        "Marca": metric.brand_name,
+                                        "Muestras positivas": metric.positive_sample_count,
+                                        "Exposición estimada (s)": round(metric.estimated_seconds, 2),
+                                        "Vídeo (%)": round(metric.percentage_of_video, 2),
+                                        "Apariciones": metric.appearance_count,
+                                    }
+                                    for metric in exposure.metrics
+                                ],
+                                hide_index=True,
+                                use_container_width=True,
+                            )
+                except (InferenceError, ExposureError) as error:
                     st.error(str(error))
     except VideoValidationError as error:
         st.error(str(error))
