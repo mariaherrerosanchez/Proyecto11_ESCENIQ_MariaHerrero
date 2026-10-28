@@ -105,3 +105,31 @@ Las previsualizaciones y los TXT sirven para discusión y corrección, no convie
 - Confirmación de que en lineales se anotarán todas las instancias individualizables con el mismo criterio.
 - Procedencia, URL, licencia/permiso y agrupación real por fuente o clip de las 50 imágenes. Estos campos siguen siendo `unknown`/`unverified`/provisionales en el manifiesto.
 - Ninguna de estas decisiones autoriza aún la anotación masiva, el movimiento de imágenes, la separación de conjuntos ni el entrenamiento.
+
+## Lotes posteriores al piloto: estado de revisión
+
+El lote posterior al piloto se mantiene fuera del repositorio. Los TXT, PNG de previsualización, manifiestos y datos de corrección no pertenecen al dataset definitivo ni se versionan con el código.
+
+- **Lote provisional inicial:** 45 imágenes, 72 cajas propuestas y 22 casos marcados para revisión por lineales, cartones desplegados, instancias múltiples, recortes, baja definición o desenfoque.
+- **Lote corregido:** 6 imágenes se excluyeron provisionalmente por ser cartones desplegados; permanecen 39 imágenes activas con 66 cajas provisionales.
+- **Piloto independiente:** 5 imágenes y 17 cajas provisionales, conservadas aparte y sin modificación durante la corrección del lote de 45.
+- **Total candidato:** 44 imágenes (39 del lote corregido + 5 del piloto), todas pendientes de aprobación visual definitiva antes de cualquier incorporación al dataset.
+- `2026-10-23_10h46_10.png` conserva estado `policy_review`: es una valla publicitaria y requiere una decisión humana explícita sobre su inclusión.
+
+Los resultados siguen sujetos a revisión humana, especialmente lineales, escenas borrosas, productos solapados y objetos parcialmente visibles. Esta tanda no autoriza particiones, entrenamiento ni publicación de datos.
+
+## Regenerar localmente el lote corregido
+
+`scripts/revise_eggo_annotations.py` no contiene coordenadas ni identificadores de imágenes. Requiere un JSON local, fuera del repositorio, con tres claves: `excluded` (archivo y justificación), `revised_boxes` (archivo y cajas normalizadas `xyxy`) y `review_overrides` (estado u observación opcionales).
+
+Ejemplo, usando rutas configurables de tu entorno:
+
+```powershell
+python scripts/revise_eggo_annotations.py \
+  --originals <directorio-originales> \
+  --source <directorio-anotaciones-provisionales> \
+  --corrections C:\ESCENIQ_Datasets\Eggo\revision_corrections.json \
+  --output <directorio-de-salida-vacío>
+```
+
+El script rechaza una salida existente, valida las cajas con `validate_yolo_label()`, genera una previsualización por etiqueta activa y contrasta los hashes de los originales. No debe ejecutarse sobre el lote ya validado salvo que se autorice una regeneración separada.
