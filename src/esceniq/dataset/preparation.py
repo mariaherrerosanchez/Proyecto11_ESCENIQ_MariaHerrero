@@ -15,6 +15,10 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 MANIFEST_FIELDS = (
     "image_path", "label_path", "class_ids", "source", "group_id", "split", "license",
 )
+# Las etiquetas se suelen serializar con precisión decimal finita. Esta tolerancia
+# admite únicamente un exceso de redondeo de hasta ocho decimales, no cajas reales
+# fuera de la imagen.
+YOLO_BOUNDARY_TOLERANCE = 1e-8
 
 
 class DatasetValidationError(ValueError):
@@ -174,7 +178,12 @@ def read_manifest(path: Path) -> list[DatasetRecord]:
 
 
 def validate_yolo_label(label_path: Path) -> tuple[int, ...]:
-    """Valida un TXT YOLO; un archivo vacío es una imagen negativa válida."""
+    """Valida un TXT YOLO; un archivo vacío es una imagen negativa válida.
+
+    Además de los valores normalizados, comprueba los bordes derivados de la caja.
+    Se permite una tolerancia máxima de ``1e-8`` para errores de serialización
+    decimal, pero no para anotaciones que realmente excedan la imagen.
+    """
     class_ids: list[int] = []
     for line_number, line in enumerate(label_path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
@@ -191,6 +200,12 @@ def validate_yolo_label(label_path: Path) -> tuple[int, ...]:
             raise DatasetValidationError(f"{label_path}:{line_number} usa una clase desconocida.")
         if not all(0 <= value <= 1 for value in (x_center, y_center, width, height)) or width <= 0 or height <= 0:
             raise DatasetValidationError(f"{label_path}:{line_number} tiene coordenadas YOLO inválidas.")
+        left, right = x_center - width / 2, x_center + width / 2
+        top, bottom = y_center - height / 2, y_center + height / 2
+        if left < -YOLO_BOUNDARY_TOLERANCE or right > 1 + YOLO_BOUNDARY_TOLERANCE:
+            raise DatasetValidationError(f"{label_path}:{line_number} excede los límites horizontales de la imagen.")
+        if top < -YOLO_BOUNDARY_TOLERANCE or bottom > 1 + YOLO_BOUNDARY_TOLERANCE:
+            raise DatasetValidationError(f"{label_path}:{line_number} excede los límites verticales de la imagen.")
         class_ids.append(class_id)
     return tuple(class_ids)
 

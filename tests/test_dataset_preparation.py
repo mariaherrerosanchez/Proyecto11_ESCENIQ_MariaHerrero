@@ -70,6 +70,20 @@ class DatasetPreparationTests(unittest.TestCase):
             with self.assertRaises(DatasetValidationError):
                 validate_yolo_label(invalid)
 
+    def test_yolo_labels_validate_derived_edges_with_minimal_rounding_tolerance(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
+            label = Path(temporary) / "edge.txt"
+            label.write_text("0 0.5 0.5 1.0 1.0\n", encoding="utf-8")
+            self.assertEqual(validate_yolo_label(label), (0,))
+
+            # Un exceso de 5e-9 procede de serializar valores válidos al borde.
+            label.write_text("0 0.500000005 0.5 1.0 1.0\n", encoding="utf-8")
+            self.assertEqual(validate_yolo_label(label), (0,))
+
+            label.write_text("0 0.500001 0.5 1.0 1.0\n", encoding="utf-8")
+            with self.assertRaisesRegex(DatasetValidationError, "límites horizontales"):
+                validate_yolo_label(label)
+
     def test_dataset_files_detect_missing_pairs_and_allow_negative_image(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temporary:
             root = Path(temporary)
