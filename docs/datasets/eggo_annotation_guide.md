@@ -1,9 +1,15 @@
 # Guía de anotación YOLO — Eggo
 
 **Clase única:** `0 = eggo`  
-**Estado:** guía para una prueba piloto; no valida ni crea anotaciones automáticamente.
+**Estado:** guía de anotación y trazabilidad; no valida ni crea anotaciones automáticamente.
 
-Esta guía se aplica a los 50 PNG inventariados y auditados para Eggo. Los originales permanecen fuera del repositorio y deben abrirse en una herramienta gráfica de anotación que exporte texto YOLO. No asignar todavía ningún `split` y no alterar el manifiesto de procedencia ni el contrato de `DatasetRecord`.
+Esta guía se aplica a los 50 PNG inventariados y auditados para Eggo. Los originales permanecen fuera del repositorio y deben abrirse en una herramienta gráfica de anotación que exporte texto YOLO. No altera el manifiesto de procedencia ni el contrato de `DatasetRecord`.
+
+## Estado consolidado de revisión humana
+
+La revisión visual humana ha finalizado. El JSON definitivo de revisión, conservado fuera del repositorio, contiene **44 imágenes aprobadas** y **83 cajas YOLO de clase `0`**. Las cinco imágenes del piloto y las 39 del lote corregido se incorporaron a este recuento; las seis imágenes de cartones desplegados permanecen excluidas del conjunto candidato.
+
+La aprobación de las cajas no resuelve las limitaciones de procedencia, licencia, diversidad ni independencia entre fuentes. El dataset piloto derivado se usa únicamente para experimentación local y no convierte el modelo de Eggo en el modelo oficial de cinco marcas de ESCENIQ.
 
 ## Formato YOLO
 
@@ -22,7 +28,7 @@ width    = (x_max - x_min) / W
 height   = (y_max - y_min) / H
 ```
 
-No redondear píxeles antes de normalizar. Revisar visualmente que la caja permanezca dentro de la imagen, que ancho y alto sean positivos y que la primera columna sea siempre `0`. La infraestructura existente valida estos requisitos con `validate_yolo_label()`; no acepta clases fuera del catálogo oficial.
+No redondear píxeles antes de normalizar. Revisar visualmente que la caja permanezca dentro de la imagen, que ancho y alto sean positivos y que la primera columna sea siempre `0`. La infraestructura existente valida también los bordes derivados de la caja; acepta solo una tolerancia técnica de `1e-8` para redondeo decimal y no acepta desbordamientos reales. No acepta clases fuera del catálogo oficial.
 
 Ejemplo **solo de propuesta piloto**, para `2026-10-23_10h24_28.png` (1.234 × 928 px) y la caja `(28, 143, 1199, 830)`:
 
@@ -58,9 +64,9 @@ La persona anotadora debe confirmar la caja en la herramienta gráfica antes de 
 
 Evitar cajas excesivamente holgadas con mucho fondo, así como cajas que corten una parte visible del envase. Si dos personas discrepan, conservar la imagen como pendiente y registrar la decisión antes de continuar la tanda.
 
-## Prueba piloto propuesta
+## Prueba piloto inicial (histórico)
 
-La muestra combina casos nítidos, diseño histórico, instancias múltiples y una escena difícil. Todas las coordenadas siguientes son **propuestas en píxeles `(x_min, y_min, x_max, y_max)`**, revisadas visualmente; no son etiquetas aprobadas ni se han escrito en archivos YOLO.
+La muestra combinó casos nítidos, diseño histórico, instancias múltiples y una escena difícil. Las coordenadas siguientes fueron **propuestas iniciales en píxeles `(x_min, y_min, x_max, y_max)`**; el estado definitivo es el indicado en el resumen de revisión humana.
 
 | Imagen | Dimensiones | Cobertura | Motivo y propuesta |
 | --- | ---: | --- | --- |
@@ -70,7 +76,7 @@ La muestra combina casos nítidos, diseño histórico, instancias múltiples y u
 | `2026-10-23_10h32_53.png` | 1512 × 792 | 4 envases + 1 logo aislado | Composición publicitaria que prueba la regla de varias instancias y logo no contenido en envase. Propuestas de envases: `(14,29,878,535)`, `(907,0,1512,332)`, `(936,352,1477,590)`, `(378,480,987,753)`; logo aislado: `(1093,585,1502,783)`. |
 | `2026-10-23_10h30_25.png` | 603 × 515 | 1 envase visible | Fotograma borroso, señalado por la auditoría. Propuesta de la extensión visible: `(285,323,581,484)`. Debe recibir revisión de una segunda persona antes de incluirse. |
 
-## Resultado de la revisión piloto (provisional)
+## Resultado inicial de la revisión piloto (histórico)
 
 Se han materializado las 17 propuestas en TXT YOLO **provisionales**, fuera del repositorio y fuera del dataset definitivo:
 
@@ -87,24 +93,22 @@ Decisiones de la revisión:
 - `2026-10-23_10h32_53.png`: 4 cajas de envase y 1 caja de logotipo aislado; no se duplicó ningún logo incluido en un envase.
 - `2026-10-23_10h30_25.png`: 1 caja alrededor de la porción visible del envase. La imagen sigue marcada para revisión debido al desenfoque.
 
-Las previsualizaciones y los TXT sirven para discusión y corrección, no convierten las anotaciones en aceptadas ni autorizan su incorporación a `datasets/esceniq/`.
+Las previsualizaciones y los TXT sirvieron para discusión y corrección. La aprobación posterior quedó registrada exclusivamente en el JSON definitivo de revisión, fuera del repositorio.
 
-## Cómo ejecutar la prueba piloto
+## Cómo se realizó la prueba piloto
 
-1. Abrir solo estas cinco imágenes en una herramienta de etiquetado gráfica configurada con una única categoría: `0`, `eggo`.
-2. Usar las propuestas y previsualizaciones como referencia, no como importación automática. Ajustar cada caja sobre la imagen original a escala completa.
-3. Los TXT provisionales se encuentran en `C:\ESCENIQ_Datasets\Eggo\piloto\labels\`; corregirlos solo tras inspeccionar el PNG original y mantenerlos fuera de `datasets/esceniq/labels/` mientras no exista aprobación. No tocar los PNG.
-4. Solicitar una segunda revisión para las 17 cajas, con atención reforzada a las nueve del lineal, al logo aislado y al fotograma borroso. Revisar específicamente los tres recortes inferiores que se dejaron sin anotar.
-5. Una vez aprobadas, validar el formato con `validate_yolo_label()` y comprobar visualmente la superposición caja-imagen. Solo entonces decidir si se incorporan al flujo de preparación del dataset.
-6. No crear `train`, `val` o `test` hasta que se conozcan fuente, licencia y `group_id` reales de los originales.
+1. Se abrieron únicamente las cinco imágenes piloto en una herramienta de etiquetado gráfica con una única categoría: `0`, `eggo`.
+2. Las propuestas y previsualizaciones se usaron como referencia, con ajuste sobre el PNG original a escala completa.
+3. Los TXT provisionales permanecieron fuera del repositorio y se validaron sintácticamente antes de la revisión humana definitiva.
+4. La segunda revisión cubrió las 17 cajas iniciales, con atención reforzada al lineal, al logotipo aislado y al fotograma borroso.
+5. La preparación posterior del piloto derivó una partición local para experimentación; no acredita independencia por fuente ni equivale al protocolo requerido para un dataset oficial.
 
-## Pendientes de revisión humana
+## Decisiones y limitaciones aún abiertas
 
-- Aprobación o ajuste de todas las 17 cajas piloto propuestas.
 - Decisión sobre el umbral de legibilidad/tamaño mínimo para los productos pequeños y borrosos; la auditoría identificó ocho imágenes con lado mínimo menor de 400 px.
 - Confirmación de que en lineales se anotarán todas las instancias individualizables con el mismo criterio.
 - Procedencia, URL, licencia/permiso y agrupación real por fuente o clip de las 50 imágenes. Estos campos siguen siendo `unknown`/`unverified`/provisionales en el manifiesto.
-- Ninguna de estas decisiones autoriza aún la anotación masiva, el movimiento de imágenes, la separación de conjuntos ni el entrenamiento.
+- Las anotaciones ya aprobadas no autorizan publicar datos, pesos, imágenes ni vídeos sin verificar derechos de uso.
 
 ## Lotes posteriores al piloto: estado de revisión
 
@@ -113,10 +117,10 @@ El lote posterior al piloto se mantiene fuera del repositorio. Los TXT, PNG de p
 - **Lote provisional inicial:** 45 imágenes, 72 cajas propuestas y 22 casos marcados para revisión por lineales, cartones desplegados, instancias múltiples, recortes, baja definición o desenfoque.
 - **Lote corregido:** 6 imágenes se excluyeron provisionalmente por ser cartones desplegados; permanecen 39 imágenes activas con 66 cajas provisionales.
 - **Piloto independiente:** 5 imágenes y 17 cajas provisionales, conservadas aparte y sin modificación durante la corrección del lote de 45.
-- **Total candidato:** 44 imágenes (39 del lote corregido + 5 del piloto), todas pendientes de aprobación visual definitiva antes de cualquier incorporación al dataset.
-- `2026-10-23_10h46_10.png` conserva estado `policy_review`: es una valla publicitaria y requiere una decisión humana explícita sobre su inclusión.
+- **Total candidato aprobado:** 44 imágenes (39 del lote corregido + 5 del piloto) y 83 cajas YOLO.
+- La decisión sobre `2026-10-23_10h46_10.png`, una valla publicitaria, se resolvió durante la revisión humana definitiva: figura entre las 44 imágenes aprobadas.
 
-Los resultados siguen sujetos a revisión humana, especialmente lineales, escenas borrosas, productos solapados y objetos parcialmente visibles. Esta tanda no autoriza particiones, entrenamiento ni publicación de datos.
+La aprobación visual no elimina los riesgos de dataset pequeño, procedencia no verificada o partición no independiente por fuente. Esta tanda no autoriza publicar datos, imágenes o pesos.
 
 ## Regenerar localmente el lote corregido
 
