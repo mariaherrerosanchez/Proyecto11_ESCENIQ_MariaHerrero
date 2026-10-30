@@ -25,6 +25,7 @@ class InferenceMode(StrEnum):
 
     TECHNICAL_TEST = "technical_test"
     ESCENIQ = "esceniq"
+    EGGO_EXPERIMENTAL = "eggo_experimental"
 
 
 @dataclass(frozen=True)
@@ -123,7 +124,14 @@ def _normalize_model_names(names: Mapping[int, str] | Sequence[str]) -> dict[int
 
 
 def _validate_mode_classes(mode: InferenceMode, model_names: Mapping[int, str]) -> None:
-    if mode is not InferenceMode.ESCENIQ:
+    if mode is InferenceMode.TECHNICAL_TEST:
+        return
+    if mode is InferenceMode.EGGO_EXPERIMENTAL:
+        if dict(model_names) != {0: "eggo"}:
+            raise InferenceError(
+                "El modo Eggo experimental exige exclusivamente la clase 0=eggo; "
+                "no puede interpretarse como modelo oficial ESCENIQ."
+            )
         return
     try:
         validate_yolo_names(model_names)
@@ -132,6 +140,17 @@ def _validate_mode_classes(mode: InferenceMode, model_names: Mapping[int, str]) 
             "El modelo no coincide con las cinco clases oficiales de ESCENIQ; "
             "no puede interpretarse como detección de marcas."
         ) from error
+
+
+def _brand_name_for_detection(mode: InferenceMode, class_id: int) -> str | None:
+    """Normaliza únicamente las clases permitidas por el modo seleccionado."""
+    if mode is InferenceMode.TECHNICAL_TEST:
+        return None
+    if mode is InferenceMode.EGGO_EXPERIMENTAL:
+        if class_id != 0:
+            raise InferenceError("El modelo experimental devolvió una clase distinta de 0=eggo.")
+        return "Eggo"
+    return brand_name_for_yolo_id(class_id)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -172,7 +191,7 @@ def _parse_detections(
             bbox = tuple(float(value) for value in bbox_value)
             if len(bbox) != 4 or not all(math.isfinite(value) for value in bbox):
                 raise InferenceError("El modelo devolvió una caja delimitadora inválida.")
-            brand_name = brand_name_for_yolo_id(class_id) if config.mode is InferenceMode.ESCENIQ else None
+            brand_name = _brand_name_for_detection(config.mode, class_id)
             detections.append(
                 Detection(
                     class_id=class_id,

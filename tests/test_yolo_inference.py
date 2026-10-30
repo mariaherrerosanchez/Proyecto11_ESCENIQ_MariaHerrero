@@ -135,6 +135,30 @@ class YOLOInferenceTests(unittest.TestCase):
             self.analyze(model, capture, self.config(mode=InferenceMode.ESCENIQ))
         self.assertEqual(capture.frames, ["frame-0"])
 
+    def test_eggo_experimental_mode_accepts_only_the_single_eggo_class(self):
+        boxes = FakeBoxes([0], [0.8], [[1, 2, 30, 40]])
+        model = FakeModel({0: "eggo"}, {"frame-0": [FakeResult(boxes)]})
+        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+
+        result = self.analyze(model, capture, self.config(mode=InferenceMode.EGGO_EXPERIMENTAL))
+
+        self.assertEqual(result.detections[0].brand_name, "Eggo")
+
+        for names in ({0: "person"}, {0: "eggo", 1: "coca_cola"}):
+            with self.subTest(names=names):
+                invalid_capture = FakeCapture(["frame-0"])
+                with self.assertRaisesRegex(InferenceError, "Eggo experimental"):
+                    self.analyze(FakeModel(names, {}), invalid_capture, self.config(mode=InferenceMode.EGGO_EXPERIMENTAL))
+                self.assertEqual(invalid_capture.frames, ["frame-0"])
+
+    def test_esceniq_mode_rejects_the_experimental_eggo_model(self):
+        model = FakeModel({0: "eggo"}, {})
+        capture = FakeCapture(["frame-0"])
+
+        with self.assertRaisesRegex(InferenceError, "cinco clases oficiales"):
+            self.analyze(model, capture, self.config(mode=InferenceMode.ESCENIQ))
+        self.assertEqual(capture.frames, ["frame-0"])
+
     def test_handles_video_without_detections(self):
         model = FakeModel({0: "person"}, {})
         capture = FakeCapture([f"frame-{index}" for index in range(10)])

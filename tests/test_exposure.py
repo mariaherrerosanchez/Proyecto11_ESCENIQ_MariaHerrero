@@ -8,12 +8,12 @@ from esceniq.vision import Detection, InferenceMode, InferenceResult
 
 
 class ExposureTests(unittest.TestCase):
-    def result(self, detections=(), *, duration=4.0, interval=1.0, mode=InferenceMode.ESCENIQ):
+    def result(self, detections=(), *, duration=4.0, interval=1.0, mode=InferenceMode.ESCENIQ, model_class_names=None):
         return InferenceResult(
             video_metadata=VideoMetadata(Path("video.mp4"), 10.0, int(duration * 10), 640, 480, duration),
             model_path=Path("model.pt"),
             mode=mode,
-            model_class_names={0: "eggo", 1: "coca_cola", 2: "pepsi", 3: "fedex", 4: "wilson"},
+            model_class_names=model_class_names or {0: "eggo", 1: "coca_cola", 2: "pepsi", 3: "fedex", 4: "wilson"},
             confidence_threshold=0.25,
             sample_interval_seconds=interval,
             analyzed_frame_count=0,
@@ -114,6 +114,27 @@ class ExposureTests(unittest.TestCase):
         invalid_brand = self.result([replace(self.detection(0, 0.0, 0), brand_name=None)])
         with self.assertRaisesRegex(ExposureError, "marca ESCENIQ"):
             calculate_exposure(invalid_brand)
+
+    def test_eggo_experimental_result_uses_the_same_temporal_aggregation(self):
+        result = self.result(
+            [self.detection(0, 0.0, 0), self.detection(0, 0.0, 0), self.detection(0, 1.0, 10)],
+            duration=2.0,
+            mode=InferenceMode.EGGO_EXPERIMENTAL,
+            model_class_names={0: "eggo"},
+        )
+
+        metric = self.metric(result, "Eggo")
+
+        self.assertEqual(metric.positive_sample_count, 2)
+        self.assertEqual(metric.estimated_seconds, 2.0)
+
+        invalid = self.result(
+            [replace(self.detection(0, 0.0, 0), brand_name=None)],
+            mode=InferenceMode.EGGO_EXPERIMENTAL,
+            model_class_names={0: "eggo"},
+        )
+        with self.assertRaisesRegex(ExposureError, "experimental"):
+            calculate_exposure(invalid)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,14 @@ from esceniq.analytics import ExposureError, calculate_exposure
 
 MAX_VIDEO_HEIGHT_PX = 480
 MAX_VIDEO_WIDTH_PX = 960
+EGGO_EXPERIMENTAL_MODEL_PATH = (
+    r"C:\ESCENIQ_Datasets\Eggo\training_runs\eggo_yolo11n_pilot_e50_img640_b4_s42\weights\best.pt"
+)
+MODE_LABELS = {
+    "Prueba técnica (clases originales del modelo)": InferenceMode.TECHNICAL_TEST,
+    "Eggo experimental (1 clase)": InferenceMode.EGGO_EXPERIMENTAL,
+    "ESCENIQ (cinco marcas oficiales)": InferenceMode.ESCENIQ,
+}
 
 
 def format_duration(seconds: float) -> str:
@@ -27,11 +35,12 @@ def player_width(width: int, height: int) -> int:
 
 
 def inference_mode_from_label(label: str) -> InferenceMode:
-    return (
-        InferenceMode.ESCENIQ
-        if label == "ESCENIQ (cinco marcas oficiales)"
-        else InferenceMode.TECHNICAL_TEST
-    )
+    return MODE_LABELS[label]
+
+
+def suggested_model_path(mode: InferenceMode) -> str:
+    """Devuelve una sugerencia editable sin imponer pesos locales a otros modos."""
+    return EGGO_EXPERIMENTAL_MODEL_PATH if mode is InferenceMode.EGGO_EXPERIMENTAL else ""
 
 
 def main() -> None:
@@ -67,11 +76,20 @@ def main() -> None:
             st.subheader("Inferencia YOLO")
             mode_label = st.radio(
                 "Modo de inferencia",
-                ("Prueba técnica (clases originales del modelo)", "ESCENIQ (cinco marcas oficiales)"),
-                help="La prueba técnica no interpreta clases genéricas como marcas. El modo ESCENIQ exige el catálogo oficial.",
+                tuple(MODE_LABELS),
+                help="La prueba técnica conserva clases genéricas; Eggo experimental admite solo 0=eggo; ESCENIQ exige el catálogo oficial completo.",
             )
+            mode = inference_mode_from_label(mode_label)
+            if mode is InferenceMode.EGGO_EXPERIMENTAL:
+                st.warning(
+                    "Detector experimental de una sola marca. Su rendimiento es limitado y sus estimaciones de "
+                    "exposición no son fiables para uso comercial. Si no detecta Eggo, no significa que el vídeo "
+                    "no contenga otras marcas."
+                )
             model_path = st.text_input(
                 "Ruta local de los pesos YOLO (.pt)",
+                value=suggested_model_path(mode),
+                key=f"model_path_{mode.value}",
                 help="Los pesos permanecen locales. ESCENIQ no descarga modelos automáticamente.",
             )
             confidence, sample_interval = st.columns(2)
@@ -86,7 +104,7 @@ def main() -> None:
                     model_path=Path(model_path),
                     confidence_threshold=float(confidence_threshold),
                     sample_interval_seconds=float(sample_interval_seconds),
-                    mode=inference_mode_from_label(mode_label),
+                    mode=mode,
                 )
                 try:
                     progress = st.progress(0, text="Preparando inferencia local…")
@@ -107,10 +125,19 @@ def main() -> None:
                     else:
                         exposure = calculate_exposure(result)
                         if not exposure.metrics:
-                            st.info("El análisis terminó correctamente sin detecciones de marcas.")
+                            if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+                                st.info("El análisis terminó sin detecciones de Eggo. Esto no informa sobre otras marcas del vídeo.")
+                            else:
+                                st.info("El análisis terminó correctamente sin detecciones de marcas.")
                         else:
                             st.subheader("Exposición estimada por marca")
-                            st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
+                            if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+                                st.caption(
+                                    "Estimación experimental de Eggo basada en muestras; no representa presencia "
+                                    "continua exacta ni evaluación comercial."
+                                )
+                            else:
+                                st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
                             st.dataframe(
                                 [
                                     {

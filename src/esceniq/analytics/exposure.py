@@ -34,7 +34,7 @@ class ExposureMetric:
 
 @dataclass(frozen=True)
 class ExposureSummary:
-    """Métricas calculadas a partir de un resultado ESCENIQ válido."""
+    """Métricas calculadas a partir de un resultado de marca válido."""
 
     video_duration_seconds: float
     sample_interval_seconds: float
@@ -50,14 +50,17 @@ def _validate_result(result: InferenceResult) -> None:
         raise ExposureError("La duración del vídeo debe ser positiva y finita.")
     if not math.isfinite(result.sample_interval_seconds) or result.sample_interval_seconds <= 0:
         raise ExposureError("El intervalo de muestreo debe ser positivo y finito.")
-    if result.mode is not InferenceMode.ESCENIQ:
+    if result.mode not in {InferenceMode.ESCENIQ, InferenceMode.EGGO_EXPERIMENTAL}:
         raise ExposureError(
             "Las inferencias de prueba técnica no se pueden convertir en métricas de marca ESCENIQ."
         )
 
 
-def _validate_detection(detection: Detection, duration_seconds: float) -> str:
-    if detection.brand_name not in OFFICIAL_BRAND_NAMES:
+def _validate_detection(detection: Detection, duration_seconds: float, mode: InferenceMode) -> str:
+    if mode is InferenceMode.EGGO_EXPERIMENTAL:
+        if detection.class_id != 0 or detection.brand_name != "Eggo":
+            raise ExposureError("La inferencia experimental solo puede contener la clase 0=eggo.")
+    elif detection.brand_name not in OFFICIAL_BRAND_NAMES:
         raise ExposureError("La detección no contiene una marca ESCENIQ oficial válida.")
     try:
         expected_brand = brand_name_for_yolo_id(detection.class_id)
@@ -87,18 +90,19 @@ def _merge_intervals(intervals: Iterable[Interval]) -> tuple[Interval, ...]:
 
 
 def calculate_exposure(result: InferenceResult) -> ExposureSummary:
-    """Calcula estimaciones de exposición por marca para un resultado ESCENIQ.
+    """Calcula estimaciones de exposición por marca para un resultado válido.
 
     Varias cajas de una marca en el mismo fotograma forman una única muestra
     positiva. Muestras de marcas distintas se calculan de manera independiente,
-    por lo que sus exposiciones pueden solaparse.
+    por lo que sus exposiciones pueden solaparse. El modo experimental solo
+    produce la métrica de Eggo y no afirma nada sobre otras marcas.
     """
     _validate_result(result)
     duration = result.video_metadata.duration_seconds
     interval = result.sample_interval_seconds
     sample_timestamps_by_brand: dict[str, set[tuple[int, float]]] = {}
     for detection in result.detections:
-        brand_name = _validate_detection(detection, duration)
+        brand_name = _validate_detection(detection, duration, result.mode)
         sample_timestamps_by_brand.setdefault(brand_name, set()).add(
             (detection.frame_index, detection.timestamp_seconds)
         )
