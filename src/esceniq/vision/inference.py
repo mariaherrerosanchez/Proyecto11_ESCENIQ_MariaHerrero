@@ -14,6 +14,7 @@ from esceniq.vision.brand_classes import (
     brand_name_for_yolo_id,
     validate_yolo_names,
 )
+from esceniq.vision.evidence import EvidenceCollector, VisualEvidence
 
 
 class InferenceError(RuntimeError):
@@ -74,6 +75,7 @@ class InferenceResult:
     analyzed_frame_count: int
     elapsed_seconds: float
     detections: tuple[Detection, ...]
+    evidences: tuple[VisualEvidence, ...] = ()
 
 
 class YOLOModel(Protocol):
@@ -233,6 +235,7 @@ def analyze_video(
     capture = cv2.VideoCapture(str(path))
     start_time = clock()
     detections: list[Detection] = []
+    evidence_collector = EvidenceCollector(metadata.frame_count, cv2)
     analyzed_frame_count = 0
     frame_index = 0
     try:
@@ -249,15 +252,18 @@ def analyze_video(
                     results = model.predict(frame, conf=config.confidence_threshold, verbose=False)
                 except Exception as error:
                     raise InferenceError("La inferencia YOLO falló al procesar un fotograma.") from error
-                detections.extend(
-                    _parse_detections(
+                frame_detections = _parse_detections(
                         results,
                         model_names=model_names,
                         config=config,
                         frame_index=frame_index,
                         timestamp_seconds=frame_index / metadata.fps,
                     )
-                )
+                detections.extend(frame_detections)
+                try:
+                    evidence_collector.add(frame, frame_detections)
+                except (AttributeError, ValueError) as error:
+                    raise InferenceError("No se pudo generar la evidencia visual del fotograma.") from error
                 analyzed_frame_count += 1
                 if progress_callback is not None:
                     progress_callback(analyzed_frame_count, expected_sample_count)
@@ -275,4 +281,5 @@ def analyze_video(
         analyzed_frame_count=analyzed_frame_count,
         elapsed_seconds=clock() - start_time,
         detections=tuple(detections),
+        evidences=evidence_collector.build(),
     )

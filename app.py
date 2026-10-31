@@ -2,13 +2,23 @@
 from __future__ import annotations
 
 import sys
+from hashlib import sha256
 from pathlib import Path
 
+import cv2
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from esceniq.video import VideoValidationError, probe_video, temporary_video_file
-from esceniq.vision import InferenceConfig, InferenceError, InferenceMode, analyze_video
+from esceniq.vision import (
+    AUTOMATIC_REVIEW_STATUS,
+    MAX_EVIDENCE_FRAMES,
+    InferenceConfig,
+    InferenceError,
+    InferenceMode,
+    analyze_video,
+)
+from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
 
 MAX_VIDEO_HEIGHT_PX = 480
@@ -43,6 +53,88 @@ def suggested_model_path(mode: InferenceMode) -> str:
     return EGGO_EXPERIMENTAL_MODEL_PATH if mode is InferenceMode.EGGO_EXPERIMENTAL else ""
 
 
+def render_evidence_gallery(result) -> None:
+    """Muestra solo las evidencias temporales que produjo la misma inferencia."""
+    st.subheader("Evidencias visuales")
+    if not result.evidences:
+        st.info("No hay evidencias visuales porque el análisis no produjo detecciones.")
+        return
+    st.caption(
+        f"Hasta {MAX_EVIDENCE_FRAMES} fotogramas distribuidos a lo largo del vídeo. "
+        "Las imágenes se conservan solo durante esta sesión."
+    )
+    analysis_key = f"{result.model_path}_{result.elapsed_seconds}_{result.confidence_threshold}"
+    visual_confidence = st.number_input(
+        "Umbral visual de confianza",
+        min_value=float(result.confidence_threshold),
+        max_value=1.0,
+        value=float(result.confidence_threshold),
+        step=0.05,
+        key=f"visual_confidence_{analysis_key}",
+        help="Solo cambia las cajas visibles en la galería; no altera la inferencia ni las métricas.",
+    )
+    show_labels = st.checkbox(
+        "Mostrar etiquetas de las cajas",
+        value=True,
+        key=f"show_evidence_labels_{analysis_key}",
+    )
+    if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+        st.warning(
+            "Las detecciones Eggo son candidatas automáticas: revísalas visualmente, pues pueden incluir falsos positivos."
+        )
+    for start in range(0, len(result.evidences), 3):
+        for column, evidence in zip(st.columns(3), result.evidences[start : start + 3], strict=False):
+            frame_detections = tuple(
+                detection for detection in result.detections if detection.frame_index == evidence.frame_index
+            )
+            visible = visible_detections(frame_detections, float(visual_confidence))
+            column.image(
+                render_evidence_jpeg(evidence, visible, show_labels=show_labels, cv2=cv2),
+                use_container_width=True,
+            )
+            column.caption(
+                f"{format_duration(evidence.timestamp_seconds)} · {len(visible)} detecciones visibles\n\n"
+                f"{AUTOMATIC_REVIEW_STATUS}"
+            )
+
+
+def render_inference_result(result) -> None:
+    analyzed, elapsed, detection_count = st.columns(3)
+    analyzed.metric("Fotogramas analizados", result.analyzed_frame_count)
+    elapsed.metric("Tiempo de ejecución", f"{result.elapsed_seconds:.2f} s")
+    detection_count.metric("Detecciones", len(result.detections))
+    render_evidence_gallery(result)
+    if result.mode is InferenceMode.TECHNICAL_TEST:
+        st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
+        return
+    exposure = calculate_exposure(result)
+    if not exposure.metrics:
+        if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+            st.info("El análisis terminó sin detecciones de Eggo. Esto no informa sobre otras marcas del vídeo.")
+        else:
+            st.info("El análisis terminó correctamente sin detecciones de marcas.")
+        return
+    st.subheader("Exposición estimada por marca")
+    if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+        st.caption("Estimación experimental de Eggo basada en muestras; no representa presencia continua exacta ni evaluación comercial.")
+    else:
+        st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
+    st.dataframe(
+        [
+            {
+                "Marca": metric.brand_name,
+                "Muestras positivas": metric.positive_sample_count,
+                "Exposición estimada (s)": round(metric.estimated_seconds, 2),
+                "Vídeo (%)": round(metric.percentage_of_video, 2),
+                "Apariciones": metric.appearance_count,
+            }
+            for metric in exposure.metrics
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="ESCENIQ · Analizar vídeo", page_icon="◉", layout="wide")
     st.title("ESCENIQ")
@@ -58,6 +150,10 @@ def main() -> None:
     if not contents:
         st.error("El archivo seleccionado está vacío.")
         return
+    video_digest = sha256(contents).hexdigest()
+    if st.session_state.get("analysis_video_digest") != video_digest:
+        st.session_state["analysis_video_digest"] = video_digest
+        st.session_state.pop("inference_result", None)
     try:
         with temporary_video_file(contents) as temporary_path:
             metadata = probe_video(temporary_path)
@@ -116,44 +212,12 @@ def main() -> None:
                     with st.spinner("Procesando fotogramas localmente…"):
                         result = analyze_video(temporary_path, config, progress_callback=update_progress)
                     progress.progress(100, text="Inferencia terminada.")
-                    analyzed, elapsed, detection_count = st.columns(3)
-                    analyzed.metric("Fotogramas analizados", result.analyzed_frame_count)
-                    elapsed.metric("Tiempo de ejecución", f"{result.elapsed_seconds:.2f} s")
-                    detection_count.metric("Detecciones", len(result.detections))
-                    if result.mode is InferenceMode.TECHNICAL_TEST:
-                        st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
-                    else:
-                        exposure = calculate_exposure(result)
-                        if not exposure.metrics:
-                            if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
-                                st.info("El análisis terminó sin detecciones de Eggo. Esto no informa sobre otras marcas del vídeo.")
-                            else:
-                                st.info("El análisis terminó correctamente sin detecciones de marcas.")
-                        else:
-                            st.subheader("Exposición estimada por marca")
-                            if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
-                                st.caption(
-                                    "Estimación experimental de Eggo basada en muestras; no representa presencia "
-                                    "continua exacta ni evaluación comercial."
-                                )
-                            else:
-                                st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
-                            st.dataframe(
-                                [
-                                    {
-                                        "Marca": metric.brand_name,
-                                        "Muestras positivas": metric.positive_sample_count,
-                                        "Exposición estimada (s)": round(metric.estimated_seconds, 2),
-                                        "Vídeo (%)": round(metric.percentage_of_video, 2),
-                                        "Apariciones": metric.appearance_count,
-                                    }
-                                    for metric in exposure.metrics
-                                ],
-                                hide_index=True,
-                                use_container_width=True,
-                            )
+                    st.session_state["inference_result"] = result
                 except (InferenceError, ExposureError) as error:
                     st.error(str(error))
+            result = st.session_state.get("inference_result")
+            if result is not None:
+                render_inference_result(result)
     except VideoValidationError as error:
         st.error(str(error))
     except OSError:

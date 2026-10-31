@@ -8,6 +8,7 @@ from esceniq.vision.inference import (
     InferenceResult,
     analyze_video,
 )
+from esceniq.vision.evidence import AUTOMATIC_REVIEW_STATUS, MAX_EVIDENCE_FRAMES, VisualEvidence
 
 __all__ = (
     "Detection",
@@ -16,4 +17,7 @@ __all__ = (
     "InferenceMode",
     "InferenceResult",
     "analyze_video",
+    "AUTOMATIC_REVIEW_STATUS",
+    "MAX_EVIDENCE_FRAMES",
+    "VisualEvidence",
 )
