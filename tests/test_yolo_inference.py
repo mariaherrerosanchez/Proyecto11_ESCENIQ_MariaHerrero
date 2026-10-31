@@ -24,12 +24,44 @@ class FakeCapture:
         self.released = True
 
 
+class FakeFrame:
+    shape = (480, 640, 3)
+
+    def __init__(self, name):
+        self.name = name
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == (other.name if isinstance(other, FakeFrame) else other)
+
+    def copy(self):
+        return self
+
+
 class FakeOpenCV:
+    FONT_HERSHEY_SIMPLEX = 0
+    LINE_AA = 0
+    IMWRITE_JPEG_QUALITY = 1
+
     def __init__(self, capture):
         self.capture = capture
 
     def VideoCapture(self, _path):
         return self.capture
+
+    def resize(self, frame, _size):
+        return frame
+
+    def rectangle(self, *_args):
+        pass
+
+    def putText(self, *_args):
+        pass
+
+    def imencode(self, _extension, frame, _options):
+        return True, bytearray(frame.name.encode())
 
 
 class FakeBoxes:
@@ -81,7 +113,7 @@ class YOLOInferenceTests(unittest.TestCase):
     def test_samples_frames_and_keeps_traceable_detection_fields(self):
         boxes = FakeBoxes([0, 1], [0.9, 0.2], [[1, 2, 30, 40], [5, 6, 7, 8]])
         model = FakeModel({0: "person", 1: "bicycle"}, {"frame-0": [FakeResult(boxes)]})
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
 
         result = self.analyze(model, capture, self.config(sample_interval_seconds=0.5))
 
@@ -96,11 +128,13 @@ class YOLOInferenceTests(unittest.TestCase):
         self.assertEqual(detection.frame_index, 0)
         self.assertEqual(detection.timestamp_seconds, 0.0)
         self.assertIsNone(detection.brand_name)
+        self.assertEqual(len(result.evidences), 1)
+        self.assertEqual(result.evidences[0].frame_index, detection.frame_index)
         self.assertTrue(capture.released)
 
     def test_reports_progress_for_each_analyzed_sample(self):
         model = FakeModel({0: "person"}, {})
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
         progress_updates = []
 
         analyze_video(
@@ -121,11 +155,12 @@ class YOLOInferenceTests(unittest.TestCase):
             {0: "eggo", 1: "coca_cola", 2: "pepsi", 3: "fedex", 4: "wilson"},
             {"frame-0": [FakeResult(boxes)]},
         )
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
 
         result = self.analyze(model, capture, self.config(mode=InferenceMode.ESCENIQ))
 
         self.assertEqual(result.detections[0].brand_name, "Eggo")
+        self.assertEqual(result.evidences[0].frame_index, result.detections[0].frame_index)
 
     def test_esceniq_mode_rejects_a_generic_model_before_reading_frames(self):
         model = FakeModel({0: "person"}, {})
@@ -138,11 +173,12 @@ class YOLOInferenceTests(unittest.TestCase):
     def test_eggo_experimental_mode_accepts_only_the_single_eggo_class(self):
         boxes = FakeBoxes([0], [0.8], [[1, 2, 30, 40]])
         model = FakeModel({0: "eggo"}, {"frame-0": [FakeResult(boxes)]})
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
 
         result = self.analyze(model, capture, self.config(mode=InferenceMode.EGGO_EXPERIMENTAL))
 
         self.assertEqual(result.detections[0].brand_name, "Eggo")
+        self.assertEqual(result.evidences[0].frame_index, result.detections[0].frame_index)
 
         for names in ({0: "person"}, {0: "eggo", 1: "coca_cola"}):
             with self.subTest(names=names):
@@ -161,7 +197,7 @@ class YOLOInferenceTests(unittest.TestCase):
 
     def test_handles_video_without_detections(self):
         model = FakeModel({0: "person"}, {})
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
 
         result = self.analyze(model, capture)
 
@@ -188,7 +224,7 @@ class YOLOInferenceTests(unittest.TestCase):
 
     def test_reports_inconsistent_boxes(self):
         model = FakeModel({0: "person"}, {"frame-0": [FakeResult(FakeBoxes([0], [], []))]})
-        capture = FakeCapture([f"frame-{index}" for index in range(10)])
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
 
         with self.assertRaisesRegex(InferenceError, "inconsistentes"):
             self.analyze(model, capture)

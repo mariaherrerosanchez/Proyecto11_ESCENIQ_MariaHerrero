@@ -20,6 +20,14 @@ La aplicación separa tres modos de inferencia:
 - **Eggo experimental (1 clase):** acepta exclusivamente el mapa `0=eggo`. Sugiere una ruta local editable al peso piloto; si falta, el error no afecta a los otros modos. Es un detector experimental de una sola marca, con rendimiento limitado: sus estimaciones no son adecuadas para uso comercial y no detectar Eggo no permite afirmar que no existan otras marcas.
 - **ESCENIQ (cinco marcas oficiales):** exige exactamente `0=eggo`, `1=coca_cola`, `2=pepsi`, `3=fedex`, `4=wilson`. Si no coincide, la ejecución se detiene antes de procesar el vídeo.
 
+## Evidencias visuales
+
+Al terminar un análisis, la misma pantalla muestra una galería de hasta 24 fotogramas positivos distribuidos temporalmente a lo largo del vídeo. Un **umbral visual de confianza**, cuyo mínimo es el umbral usado en la inferencia, permite ocultar cajas de baja confianza sin cambiar las detecciones, métricas ni exposición originales. También puede ocultarse el texto de las etiquetas. Cada evidencia muestra un resumen compacto con timestamp, número de cajas visibles y estado de revisión.
+
+La galería no vuelve a procesar el vídeo ni invoca YOLO al cambiar estos filtros: conserva en `st.session_state` el resultado y una única imagen JPEG base, sin anotaciones, por evidencia; las cajas se dibujan temporalmente para cada vista. Las imágenes están limitadas a 960×540 px, permanecen solo en memoria durante la sesión y se descartan al seleccionar otro vídeo.
+
+Todas las evidencias indican **«Detección automática — sin verificar»**. En el modo Eggo experimental se muestra además un aviso para revisar posibles falsos positivos; la interfaz no presenta ninguna detección como validada por una persona.
+
 ## Estimación de exposición
 
 El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ESCENIQ y del modo Eggo experimental, pero rechaza la prueba técnica. Cada muestra positiva representa el intervalo desde su timestamp hasta el timestamp más el intervalo configurado, limitado por la duración real del vídeo. Los intervalos solapados de una misma marca se fusionan; un hueco entre ellos inicia otra aparición. Por ello son estimaciones dependientes del muestreo, no una medición continua exacta. Las marcas simultáneas se calculan de forma independiente y sus porcentajes pueden sumar más de 100 %.
