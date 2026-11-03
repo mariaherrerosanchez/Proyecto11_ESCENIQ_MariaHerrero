@@ -187,6 +187,26 @@ class YOLOInferenceTests(unittest.TestCase):
                     self.analyze(FakeModel(names, {}), invalid_capture, self.config(mode=InferenceMode.EGGO_EXPERIMENTAL))
                 self.assertEqual(invalid_capture.frames, ["frame-0"])
 
+    def test_cocacola_experimental_mode_accepts_only_its_single_class(self):
+        boxes = FakeBoxes([0], [0.8], [[1, 2, 30, 40]])
+        model = FakeModel({0: "coca-cola"}, {"frame-0": [FakeResult(boxes)]})
+        capture = FakeCapture([FakeFrame(f"frame-{index}") for index in range(10)])
+
+        result = self.analyze(model, capture, self.config(mode=InferenceMode.COCACOLA_EXPERIMENTAL))
+
+        self.assertEqual(result.detections[0].class_name, "coca-cola")
+        self.assertEqual(result.detections[0].brand_name, "Coca-Cola")
+        for names in ({0: "coca_cola"}, {0: "coca-cola", 1: "eggo"}):
+            with self.subTest(names=names):
+                invalid_capture = FakeCapture(["frame-0"])
+                with self.assertRaisesRegex(InferenceError, "Coca-Cola experimental"):
+                    self.analyze(
+                        FakeModel(names, {}),
+                        invalid_capture,
+                        self.config(mode=InferenceMode.COCACOLA_EXPERIMENTAL),
+                    )
+                self.assertEqual(invalid_capture.frames, ["frame-0"])
+
     def test_esceniq_mode_rejects_the_experimental_eggo_model(self):
         model = FakeModel({0: "eggo"}, {})
         capture = FakeCapture(["frame-0"])

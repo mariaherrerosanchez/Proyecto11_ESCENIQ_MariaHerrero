@@ -14,10 +14,11 @@ streamlit run app.py
 
 La pantalla **Analizar vídeo** valida localmente un MP4, muestra sus metadatos y permite visualizarlo. También puede ejecutar inferencia por muestreo con una ruta local a pesos YOLO: no descarga modelos ni sube el archivo a servicios externos.
 
-La aplicación separa tres modos de inferencia:
+La aplicación separa cuatro modos de inferencia:
 
 - **Prueba técnica:** acepta un modelo local de clases genéricas, conserva sus nombres originales y nunca los presenta como marcas ESCENIQ.
 - **Eggo experimental (1 clase):** acepta exclusivamente el mapa `0=eggo`. Sugiere una ruta local editable al peso piloto; si falta, el error no afecta a los otros modos. Es un detector experimental de una sola marca, con rendimiento limitado: sus estimaciones no son adecuadas para uso comercial y no detectar Eggo no permite afirmar que no existan otras marcas.
+- **Coca-Cola experimental (1 clase):** acepta exclusivamente el mapa `0=coca-cola`. Sugiere una ruta local editable al peso piloto de Coca-Cola; su identificador `0` es propio de este peso y **no** cambia el catálogo oficial, donde Coca-Cola es `1=coca_cola`. Es un detector experimental con falsos positivos observados; sus estimaciones no son adecuadas para uso comercial y no detectar Coca-Cola no permite afirmar que no aparezca en el vídeo.
 - **ESCENIQ (cinco marcas oficiales):** exige exactamente `0=eggo`, `1=coca_cola`, `2=pepsi`, `3=fedex`, `4=wilson`. Si no coincide, la ejecución se detiene antes de procesar el vídeo.
 
 ## Evidencias visuales
@@ -26,11 +27,11 @@ Al terminar un análisis, la misma pantalla muestra una galería de hasta 24 fot
 
 La galería no vuelve a procesar el vídeo ni invoca YOLO al cambiar estos filtros: conserva en `st.session_state` el resultado y una única imagen JPEG base, sin anotaciones, por evidencia; las cajas se dibujan temporalmente para cada vista. Las imágenes están limitadas a 960×540 px, permanecen solo en memoria durante la sesión y se descartan al seleccionar otro vídeo.
 
-Todas las evidencias indican **«Detección automática — sin verificar»**. En el modo Eggo experimental se muestra además un aviso para revisar posibles falsos positivos; la interfaz no presenta ninguna detección como validada por una persona.
+Todas las evidencias indican **«Detección automática — sin verificar»**. En los modos experimentales de Eggo y Coca-Cola se muestra además un aviso para revisar posibles falsos positivos; la interfaz no presenta ninguna detección como validada por una persona.
 
 ## Estimación de exposición
 
-El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ESCENIQ y del modo Eggo experimental, pero rechaza la prueba técnica. Cada muestra positiva representa el intervalo desde su timestamp hasta el timestamp más el intervalo configurado, limitado por la duración real del vídeo. Los intervalos solapados de una misma marca se fusionan; un hueco entre ellos inicia otra aparición. Por ello son estimaciones dependientes del muestreo, no una medición continua exacta. Las marcas simultáneas se calculan de forma independiente y sus porcentajes pueden sumar más de 100 %.
+El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ESCENIQ y de los modos experimentales de Eggo y Coca-Cola, pero rechaza la prueba técnica. Cada muestra positiva representa el intervalo desde su timestamp hasta el timestamp más el intervalo configurado, limitado por la duración real del vídeo. Los intervalos solapados de una misma marca se fusionan; un hueco entre ellos inicia otra aparición. Por ello son estimaciones dependientes del muestreo, no una medición continua exacta. Las marcas simultáneas se calculan de forma independiente y sus porcentajes pueden sumar más de 100 %.
 
 ## Piloto de entrenamiento Eggo
 

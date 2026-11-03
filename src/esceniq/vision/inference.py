@@ -27,6 +27,19 @@ class InferenceMode(StrEnum):
     TECHNICAL_TEST = "technical_test"
     ESCENIQ = "esceniq"
     EGGO_EXPERIMENTAL = "eggo_experimental"
+    COCACOLA_EXPERIMENTAL = "cocacola_experimental"
+
+
+_EXPERIMENTAL_MODE_SPECS: dict[InferenceMode, tuple[dict[int, str], str]] = {
+    InferenceMode.EGGO_EXPERIMENTAL: ({0: "eggo"}, "Eggo"),
+    InferenceMode.COCACOLA_EXPERIMENTAL: ({0: "coca-cola"}, "Coca-Cola"),
+}
+
+
+def experimental_brand_name(mode: InferenceMode) -> str | None:
+    """Devuelve la única marca permitida por un modo experimental."""
+    specification = _EXPERIMENTAL_MODE_SPECS.get(mode)
+    return specification[1] if specification is not None else None
 
 
 @dataclass(frozen=True)
@@ -128,11 +141,14 @@ def _normalize_model_names(names: Mapping[int, str] | Sequence[str]) -> dict[int
 def _validate_mode_classes(mode: InferenceMode, model_names: Mapping[int, str]) -> None:
     if mode is InferenceMode.TECHNICAL_TEST:
         return
-    if mode is InferenceMode.EGGO_EXPERIMENTAL:
-        if dict(model_names) != {0: "eggo"}:
+    experimental_specification = _EXPERIMENTAL_MODE_SPECS.get(mode)
+    if experimental_specification is not None:
+        expected_names, brand_name = experimental_specification
+        if dict(model_names) != expected_names:
+            expected_class = next(iter(expected_names.items()))
             raise InferenceError(
-                "El modo Eggo experimental exige exclusivamente la clase 0=eggo; "
-                "no puede interpretarse como modelo oficial ESCENIQ."
+                f"El modo {brand_name} experimental exige exclusivamente la clase "
+                f"{expected_class[0]}={expected_class[1]}; no puede interpretarse como modelo oficial ESCENIQ."
             )
         return
     try:
@@ -148,10 +164,11 @@ def _brand_name_for_detection(mode: InferenceMode, class_id: int) -> str | None:
     """Normaliza únicamente las clases permitidas por el modo seleccionado."""
     if mode is InferenceMode.TECHNICAL_TEST:
         return None
-    if mode is InferenceMode.EGGO_EXPERIMENTAL:
+    experimental_brand = experimental_brand_name(mode)
+    if experimental_brand is not None:
         if class_id != 0:
-            raise InferenceError("El modelo experimental devolvió una clase distinta de 0=eggo.")
-        return "Eggo"
+            raise InferenceError("El modelo experimental devolvió una clase distinta de 0.")
+        return experimental_brand
     return brand_name_for_yolo_id(class_id)
 
 
