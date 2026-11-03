@@ -1,3 +1,4 @@
+import math
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -9,8 +10,9 @@ from esceniq.vision import Detection, InferenceMode, InferenceResult
 
 class ExposureTests(unittest.TestCase):
     def result(self, detections=(), *, duration=4.0, interval=1.0, mode=InferenceMode.ESCENIQ, model_class_names=None):
+        frame_count = max(1, int(duration * 10)) if math.isfinite(duration) else 1
         return InferenceResult(
-            video_metadata=VideoMetadata(Path("video.mp4"), 10.0, int(duration * 10), 640, 480, duration),
+            video_metadata=VideoMetadata(Path("video.mp4"), 10.0, frame_count, 640, 480, duration),
             model_path=Path("model.pt"),
             mode=mode,
             model_class_names=model_class_names or {0: "eggo", 1: "coca_cola", 2: "pepsi", 3: "fedex", 4: "wilson"},
@@ -78,6 +80,33 @@ class ExposureTests(unittest.TestCase):
         summary = calculate_exposure(self.result())
 
         self.assertEqual(summary.metrics, ())
+
+    def test_invalid_video_durations_raise_explicit_errors(self):
+        for duration in (0.0, -1.0, math.nan, math.inf):
+            with self.subTest(duration=duration):
+                result = self.result(duration=duration)
+                with self.assertRaisesRegex(ExposureError, "duración"):
+                    calculate_exposure(result)
+
+    def test_confidence_does_not_change_exposure_time(self):
+        low_confidence = self.detection(1, 0.0, 0)
+        high_confidence = replace(low_confidence, confidence=0.99)
+        low_result = self.result([replace(low_confidence, confidence=0.26)], duration=2.0)
+        high_result = self.result([high_confidence], duration=2.0)
+
+        low_metric = self.metric(low_result, "Coca-Cola")
+        high_metric = self.metric(high_result, "Coca-Cola")
+
+        self.assertEqual(low_metric.estimated_seconds, high_metric.estimated_seconds)
+        self.assertEqual(low_metric.percentage_of_video, high_metric.percentage_of_video)
+
+    def test_official_cocacola_class_normalizes_to_the_single_brand_metric(self):
+        result = self.result([self.detection(1, 0.0, 0)], duration=2.0)
+
+        metric = self.metric(result, "Coca-Cola")
+
+        self.assertEqual(metric.brand_name, "Coca-Cola")
+        self.assertEqual(metric.positive_sample_count, 1)
 
     def test_last_sample_is_limited_to_real_video_duration(self):
         result = self.result([self.detection(0, 2.0, 20)], duration=2.4)

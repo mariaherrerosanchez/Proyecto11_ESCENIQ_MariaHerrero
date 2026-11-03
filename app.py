@@ -109,12 +109,27 @@ def render_evidence_gallery(result) -> None:
             )
 
 
+def clear_inference_result() -> None:
+    """Evita que un análisis anterior se presente durante una nueva ejecución."""
+    st.session_state.pop("inference_result", None)
+    st.session_state.pop("inference_result_key", None)
+
+
+def render_inference_error(error: Exception) -> None:
+    """Muestra un fallo de inferencia, distinto de un análisis vacío."""
+    st.error(str(error))
+
+
 def render_inference_result(result) -> None:
     experimental_brand = experimental_brand_name(result.mode)
     analyzed, elapsed, detection_count = st.columns(3)
     analyzed.metric("Fotogramas analizados", result.analyzed_frame_count)
     elapsed.metric("Tiempo de ejecución", f"{result.elapsed_seconds:.2f} s")
     detection_count.metric("Detecciones", len(result.detections))
+    st.caption(
+        f"Modelo: {result.model_path} · Umbral: {result.confidence_threshold:.0%} · "
+        f"Intervalo: {result.sample_interval_seconds:g} s"
+    )
     render_evidence_gallery(result)
     if result.mode is InferenceMode.TECHNICAL_TEST:
         st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
@@ -225,8 +240,9 @@ def main() -> None:
                 float(sample_interval_seconds),
             )
             if st.session_state.get("inference_result_key") != selected_analysis_key:
-                st.session_state.pop("inference_result", None)
+                clear_inference_result()
             if st.button("Ejecutar inferencia", type="primary"):
+                clear_inference_result()
                 config = InferenceConfig(
                     model_path=Path(model_path),
                     confidence_threshold=float(confidence_threshold),
@@ -246,7 +262,7 @@ def main() -> None:
                     st.session_state["inference_result"] = result
                     st.session_state["inference_result_key"] = selected_analysis_key
                 except (InferenceError, ExposureError) as error:
-                    st.error(str(error))
+                    render_inference_error(error)
             result = (
                 st.session_state.get("inference_result")
                 if st.session_state.get("inference_result_key") == selected_analysis_key
