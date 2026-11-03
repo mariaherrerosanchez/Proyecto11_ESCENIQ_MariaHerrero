@@ -102,7 +102,7 @@ class InferenceResultRenderingTests(unittest.TestCase):
             "Vídeo (%)": 12.5,
             "Apariciones": 1,
         }]])
-        self.assertIn("Modelo: model.pt · Umbral: 25% · Intervalo: 1 s", fake_streamlit.captions[0])
+        self.assertIn("Modelo: model.pt · Umbral: 25% · Intervalo: 1 s", fake_streamlit.captions)
 
     @patch.object(app, "render_evidence_gallery")
     @patch.object(app, "calculate_exposure")
