@@ -98,6 +98,24 @@ class VisualEvidenceTests(unittest.TestCase):
         self.assertEqual(len(evidences), 1)
         self.assertEqual(evidences[0].frame_index, 2)
 
+    def test_cocacola_evidence_uses_the_commercial_brand_name_in_its_label(self):
+        cv2 = FakeOpenCV()
+        collector = EvidenceCollector(10, cv2)
+        coca_cola = Detection(
+            0,
+            "coca-cola",
+            0.84,
+            (10.0, 20.0, 100.0, 120.0),
+            0,
+            0.0,
+            "Coca-Cola",
+        )
+        collector.add(FakeFrame(), (coca_cola,))
+
+        render_evidence_jpeg(collector.build()[0], (coca_cola,), show_labels=True, cv2=cv2)
+
+        self.assertIn("Coca-Cola", cv2.labels[0])
+
 
 if __name__ == "__main__":
     unittest.main()

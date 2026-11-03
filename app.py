@@ -17,6 +17,7 @@ from esceniq.vision import (
     InferenceError,
     InferenceMode,
     analyze_video,
+    experimental_brand_name,
 )
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
@@ -26,9 +27,13 @@ MAX_VIDEO_WIDTH_PX = 960
 EGGO_EXPERIMENTAL_MODEL_PATH = (
     r"C:\ESCENIQ_Datasets\Eggo\training_runs\eggo_yolo11n_pilot_e50_img640_b4_s42\weights\best.pt"
 )
+COCACOLA_EXPERIMENTAL_MODEL_PATH = (
+    r"C:\ESCENIQ_Datasets\CocaCola_training_runs\cocacola_yolo11n_pilot_e50_img640_b8_s42\weights\best.pt"
+)
 MODE_LABELS = {
     "Prueba técnica (clases originales del modelo)": InferenceMode.TECHNICAL_TEST,
     "Eggo experimental (1 clase)": InferenceMode.EGGO_EXPERIMENTAL,
+    "Coca-Cola experimental (1 clase)": InferenceMode.COCACOLA_EXPERIMENTAL,
     "ESCENIQ (cinco marcas oficiales)": InferenceMode.ESCENIQ,
 }
 
@@ -50,7 +55,11 @@ def inference_mode_from_label(label: str) -> InferenceMode:
 
 def suggested_model_path(mode: InferenceMode) -> str:
     """Devuelve una sugerencia editable sin imponer pesos locales a otros modos."""
-    return EGGO_EXPERIMENTAL_MODEL_PATH if mode is InferenceMode.EGGO_EXPERIMENTAL else ""
+    experimental_paths = {
+        InferenceMode.EGGO_EXPERIMENTAL: EGGO_EXPERIMENTAL_MODEL_PATH,
+        InferenceMode.COCACOLA_EXPERIMENTAL: COCACOLA_EXPERIMENTAL_MODEL_PATH,
+    }
+    return experimental_paths.get(mode, "")
 
 
 def render_evidence_gallery(result) -> None:
@@ -78,9 +87,11 @@ def render_evidence_gallery(result) -> None:
         value=True,
         key=f"show_evidence_labels_{analysis_key}",
     )
-    if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
+    experimental_brand = experimental_brand_name(result.mode)
+    if experimental_brand is not None:
         st.warning(
-            "Las detecciones Eggo son candidatas automáticas: revísalas visualmente, pues pueden incluir falsos positivos."
+            f"Las detecciones de {experimental_brand} son candidatas automáticas: revísalas visualmente, "
+            "pues pueden incluir falsos positivos."
         )
     for start in range(0, len(result.evidences), 3):
         for column, evidence in zip(st.columns(3), result.evidences[start : start + 3], strict=False):
@@ -99,6 +110,7 @@ def render_evidence_gallery(result) -> None:
 
 
 def render_inference_result(result) -> None:
+    experimental_brand = experimental_brand_name(result.mode)
     analyzed, elapsed, detection_count = st.columns(3)
     analyzed.metric("Fotogramas analizados", result.analyzed_frame_count)
     elapsed.metric("Tiempo de ejecución", f"{result.elapsed_seconds:.2f} s")
@@ -109,14 +121,20 @@ def render_inference_result(result) -> None:
         return
     exposure = calculate_exposure(result)
     if not exposure.metrics:
-        if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
-            st.info("El análisis terminó sin detecciones de Eggo. Esto no informa sobre otras marcas del vídeo.")
+        if experimental_brand is not None:
+            st.info(
+                f"El análisis terminó sin detecciones de {experimental_brand}. "
+                "Esto no informa sobre otras marcas del vídeo."
+            )
         else:
             st.info("El análisis terminó correctamente sin detecciones de marcas.")
         return
     st.subheader("Exposición estimada por marca")
-    if result.mode is InferenceMode.EGGO_EXPERIMENTAL:
-        st.caption("Estimación experimental de Eggo basada en muestras; no representa presencia continua exacta ni evaluación comercial.")
+    if experimental_brand is not None:
+        st.caption(
+            f"Estimación experimental de {experimental_brand} basada en muestras; no representa presencia "
+            "continua exacta ni evaluación comercial."
+        )
     else:
         st.caption("Estimación basada en muestras; no representa presencia continua exacta.")
     st.dataframe(
@@ -173,14 +191,18 @@ def main() -> None:
             mode_label = st.radio(
                 "Modo de inferencia",
                 tuple(MODE_LABELS),
-                help="La prueba técnica conserva clases genéricas; Eggo experimental admite solo 0=eggo; ESCENIQ exige el catálogo oficial completo.",
+                help=(
+                    "La prueba técnica conserva clases genéricas; los modos experimentales exigen su única "
+                    "clase esperada; ESCENIQ exige el catálogo oficial completo."
+                ),
             )
             mode = inference_mode_from_label(mode_label)
-            if mode is InferenceMode.EGGO_EXPERIMENTAL:
+            experimental_brand = experimental_brand_name(mode)
+            if experimental_brand is not None:
                 st.warning(
-                    "Detector experimental de una sola marca. Su rendimiento es limitado y sus estimaciones de "
-                    "exposición no son fiables para uso comercial. Si no detecta Eggo, no significa que el vídeo "
-                    "no contenga otras marcas."
+                    f"Detector experimental monoclase de {experimental_brand}. Su rendimiento es limitado y sus "
+                    "estimaciones de exposición no son fiables para uso comercial. Si no detecta la marca, no "
+                    "significa que el vídeo no contenga otras marcas."
                 )
             model_path = st.text_input(
                 "Ruta local de los pesos YOLO (.pt)",
@@ -195,6 +217,15 @@ def main() -> None:
             sample_interval_seconds = sample_interval.number_input(
                 "Intervalo de muestreo (segundos)", min_value=0.1, value=1.0, step=0.1
             )
+            selected_analysis_key = (
+                video_digest,
+                mode.value,
+                model_path,
+                float(confidence_threshold),
+                float(sample_interval_seconds),
+            )
+            if st.session_state.get("inference_result_key") != selected_analysis_key:
+                st.session_state.pop("inference_result", None)
             if st.button("Ejecutar inferencia", type="primary"):
                 config = InferenceConfig(
                     model_path=Path(model_path),
@@ -213,9 +244,14 @@ def main() -> None:
                         result = analyze_video(temporary_path, config, progress_callback=update_progress)
                     progress.progress(100, text="Inferencia terminada.")
                     st.session_state["inference_result"] = result
+                    st.session_state["inference_result_key"] = selected_analysis_key
                 except (InferenceError, ExposureError) as error:
                     st.error(str(error))
-            result = st.session_state.get("inference_result")
+            result = (
+                st.session_state.get("inference_result")
+                if st.session_state.get("inference_result_key") == selected_analysis_key
+                else None
+            )
             if result is not None:
                 render_inference_result(result)
     except VideoValidationError as error:

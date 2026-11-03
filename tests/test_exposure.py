@@ -136,6 +136,36 @@ class ExposureTests(unittest.TestCase):
         with self.assertRaisesRegex(ExposureError, "experimental"):
             calculate_exposure(invalid)
 
+    def test_cocacola_experimental_result_uses_its_own_class_zero_mapping(self):
+        detection = Detection(
+            class_id=0,
+            class_name="coca-cola",
+            confidence=0.9,
+            bbox_xyxy=(1.0, 2.0, 3.0, 4.0),
+            frame_index=0,
+            timestamp_seconds=0.0,
+            brand_name="Coca-Cola",
+        )
+        result = self.result(
+            [detection, detection],
+            duration=2.0,
+            mode=InferenceMode.COCACOLA_EXPERIMENTAL,
+            model_class_names={0: "coca-cola"},
+        )
+
+        metric = self.metric(result, "Coca-Cola")
+
+        self.assertEqual(metric.positive_sample_count, 1)
+        self.assertEqual(metric.estimated_seconds, 1.0)
+        invalid = self.result(
+            [replace(detection, brand_name="Eggo")],
+            duration=2.0,
+            mode=InferenceMode.COCACOLA_EXPERIMENTAL,
+            model_class_names={0: "coca-cola"},
+        )
+        with self.assertRaisesRegex(ExposureError, "experimental"):
+            calculate_exposure(invalid)
+
 
 if __name__ == "__main__":
     unittest.main()

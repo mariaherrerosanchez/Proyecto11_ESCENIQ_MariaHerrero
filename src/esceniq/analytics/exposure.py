@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from esceniq.vision.brand_classes import OFFICIAL_BRAND_NAMES, brand_name_for_yolo_id
-from esceniq.vision.inference import Detection, InferenceMode, InferenceResult
+from esceniq.vision.inference import Detection, InferenceMode, InferenceResult, experimental_brand_name
 
 
 class ExposureError(ValueError):
@@ -50,27 +50,31 @@ def _validate_result(result: InferenceResult) -> None:
         raise ExposureError("La duración del vídeo debe ser positiva y finita.")
     if not math.isfinite(result.sample_interval_seconds) or result.sample_interval_seconds <= 0:
         raise ExposureError("El intervalo de muestreo debe ser positivo y finito.")
-    if result.mode not in {InferenceMode.ESCENIQ, InferenceMode.EGGO_EXPERIMENTAL}:
+    if result.mode is not InferenceMode.ESCENIQ and experimental_brand_name(result.mode) is None:
         raise ExposureError(
             "Las inferencias de prueba técnica no se pueden convertir en métricas de marca ESCENIQ."
         )
 
 
 def _validate_detection(detection: Detection, duration_seconds: float, mode: InferenceMode) -> str:
-    if mode is InferenceMode.EGGO_EXPERIMENTAL:
-        if detection.class_id != 0 or detection.brand_name != "Eggo":
-            raise ExposureError("La inferencia experimental solo puede contener la clase 0=eggo.")
+    experimental_brand = experimental_brand_name(mode)
+    if experimental_brand is not None:
+        if detection.class_id != 0 or detection.brand_name != experimental_brand:
+            raise ExposureError("La inferencia experimental contiene una clase o marca no permitida.")
+        brand_name = experimental_brand
     elif detection.brand_name not in OFFICIAL_BRAND_NAMES:
         raise ExposureError("La detección no contiene una marca ESCENIQ oficial válida.")
-    try:
-        expected_brand = brand_name_for_yolo_id(detection.class_id)
-    except LookupError as error:
-        raise ExposureError("La detección contiene un identificador de clase no reconocido.") from error
-    if detection.brand_name != expected_brand:
-        raise ExposureError("La marca de la detección no coincide con su identificador de clase oficial.")
+    else:
+        try:
+            expected_brand = brand_name_for_yolo_id(detection.class_id)
+        except LookupError as error:
+            raise ExposureError("La detección contiene un identificador de clase no reconocido.") from error
+        if detection.brand_name != expected_brand:
+            raise ExposureError("La marca de la detección no coincide con su identificador de clase oficial.")
+        brand_name = expected_brand
     if not math.isfinite(detection.timestamp_seconds) or not 0 <= detection.timestamp_seconds < duration_seconds:
         raise ExposureError("La detección tiene un timestamp fuera de la duración real del vídeo.")
-    return detection.brand_name
+    return brand_name
 
 
 def _merge_intervals(intervals: Iterable[Interval]) -> tuple[Interval, ...]:

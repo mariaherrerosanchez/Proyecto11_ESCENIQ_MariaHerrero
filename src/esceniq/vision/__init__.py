@@ -7,6 +7,7 @@ from esceniq.vision.inference import (
     InferenceMode,
     InferenceResult,
     analyze_video,
+    experimental_brand_name,
 )
 from esceniq.vision.evidence import AUTOMATIC_REVIEW_STATUS, MAX_EVIDENCE_FRAMES, VisualEvidence
 
@@ -17,6 +18,7 @@ __all__ = (
     "InferenceMode",
     "InferenceResult",
     "analyze_video",
+    "experimental_brand_name",
     "AUTOMATIC_REVIEW_STATUS",
     "MAX_EVIDENCE_FRAMES",
     "VisualEvidence",
