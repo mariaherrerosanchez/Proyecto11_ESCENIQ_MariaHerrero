@@ -6,9 +6,11 @@ from .sqlite_repository import (
     StorageError,
     StoredAnalysis,
     StoredDetection,
+    StoredEvidence,
     StoredExposure,
     default_database_path,
 )
+from .evidence_files import EvidenceFileStore, EvidenceStorageError, default_evidence_directory
 
 __all__ = (
     "AnalysisListItem",
@@ -16,6 +18,10 @@ __all__ = (
     "StorageError",
     "StoredAnalysis",
     "StoredDetection",
+    "StoredEvidence",
     "StoredExposure",
     "default_database_path",
+    "EvidenceFileStore",
+    "EvidenceStorageError",
+    "default_evidence_directory",
 )

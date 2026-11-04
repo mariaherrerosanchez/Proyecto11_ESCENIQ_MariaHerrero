@@ -70,6 +70,60 @@ class SqliteAnalysisRepositoryTests(unittest.TestCase):
         self.assertEqual(stored.detections[0].bbox_xyxy, (10.0, 20.0, 30.0, 40.0))
         self.assertEqual(stored.exposures[0].brand_name, "Coca-Cola")
         self.assertEqual(stored.exposures[0].positive_sample_count, 1)
+        self.assertEqual(stored.evidences, ())
+
+    def test_saves_evidence_references_once_and_recovers_them_after_reopening(self):
+        with TemporaryDirectory(dir=TEST_WORKSPACE) as temporary_directory:
+            database_path = Path(temporary_directory) / "analyses.sqlite3"
+            repository = SqliteAnalysisRepository(database_path)
+            analysis_id = self.save(repository, key="analysis-evidence")
+            saved = repository.save_evidence(
+                analysis_id,
+                frame_index=10,
+                timestamp_seconds=1.0,
+                brand_name="Coca-Cola",
+                confidence=0.9,
+                file_path=f"{analysis_id}/frame_00000010.jpg",
+                review_status="Detección automática — sin verificar",
+            )
+            repeated = repository.save_evidence(
+                analysis_id,
+                frame_index=10,
+                timestamp_seconds=1.0,
+                brand_name="Coca-Cola",
+                confidence=0.9,
+                file_path=f"{analysis_id}/frame_00000010.jpg",
+                review_status="Detección automática — sin verificar",
+            )
+            stored = SqliteAnalysisRepository(database_path).get_analysis(analysis_id)
+
+        self.assertTrue(saved)
+        self.assertFalse(repeated)
+        self.assertEqual(len(stored.evidences), 1)
+        self.assertEqual(stored.evidences[0].file_path, f"{analysis_id}/frame_00000010.jpg")
+        self.assertEqual(stored.evidences[0].brand_name, "Coca-Cola")
+
+    def test_evidence_references_respect_the_limit_per_analysis(self):
+        with TemporaryDirectory(dir=TEST_WORKSPACE) as temporary_directory:
+            repository = SqliteAnalysisRepository(Path(temporary_directory) / "analyses.sqlite3")
+            analysis_id = self.save(repository, key="analysis-evidence-limit")
+            outcomes = [
+                repository.save_evidence(
+                    analysis_id,
+                    frame_index=index,
+                    timestamp_seconds=float(index),
+                    brand_name="Coca-Cola",
+                    confidence=0.9,
+                    file_path=f"{analysis_id}/frame_{index:08d}.jpg",
+                    review_status="Detección automática — sin verificar",
+                )
+                for index in range(25)
+            ]
+            stored = repository.get_analysis(analysis_id)
+
+        self.assertEqual(outcomes.count(True), 24)
+        self.assertFalse(outcomes[-1])
+        self.assertEqual(len(stored.evidences), 24)
 
     def test_lists_newest_analysis_first_and_persists_between_connections(self):
         with TemporaryDirectory(dir=TEST_WORKSPACE) as temporary_directory:
