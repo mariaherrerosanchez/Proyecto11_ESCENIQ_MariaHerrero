@@ -24,7 +24,7 @@ La pantalla **Analizar vídeo** valida localmente un MP4, muestra sus metadatos 
 ## Funcionalidades pendientes
 
 - No hay pesos multiclase completos ni evaluación independiente para las cinco marcas oficiales.
-- Informes, Configuración y comparación de análisis no están implementados.
+- Informes y Configuración no están implementados.
 - No hay entrenamiento, reentrenamiento ni verificación humana automática desde Streamlit.
 
 ## Tema visual
@@ -81,6 +81,10 @@ Cada análisis puede conservar hasta 24 evidencias JPEG anotadas, con cajas y et
 En **Resultados**, un análisis con marcas agregadas ofrece **Descargar CSV**. El archivo usa UTF-8 con BOM y separador `;` para abrirse correctamente en Excel en español. Incluye por marca el vídeo seleccionado, detecciones, muestras positivas, exposición estimada, porcentaje, apariciones, modelo, umbral e intervalo de muestreo. La descarga reutiliza el resultado actual y su exposición ya calculada; no vuelve a ejecutar YOLO. Si no existen marcas agregadas o se trata de una prueba técnica, no se ofrece CSV.
 
 Los análisis guardados que incluyen exposición por marca ofrecen la misma descarga desde **Biblioteca**, reutilizando los datos persistidos.
+
+## Comparación de análisis
+
+**Biblioteca** permite seleccionar dos análisis guardados distintos y comparar duración, contexto de ejecución y exposición por marca sin volver a ejecutar YOLO. Una marca sin detección en un análisis de marca válido se muestra como **Ausente**; una métrica de un análisis técnico o incompleto se muestra como **No disponible**. Si cambian modo, modelo, umbral o intervalo de muestreo, ESCENIQ conserva los valores originales pero no determina cuál tiene mayor exposición, porque no son directamente equivalentes.
 
 ## Piloto de entrenamiento Eggo
 
