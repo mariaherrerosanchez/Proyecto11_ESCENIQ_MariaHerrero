@@ -135,7 +135,7 @@ class NavigationTests(unittest.TestCase):
         self.assertEqual(len(fake_streamlit.sidebar.calls), 1)
         label, options, format_func, key = fake_streamlit.sidebar.calls[0]
         self.assertEqual((label, options, key), ("Navegación", app.NAVIGATION_PAGES, "navigation_page"))
-        self.assertEqual(format_func("Biblioteca"), "▣  Biblioteca · Próximamente")
+        self.assertEqual(format_func("Biblioteca"), "▣  Biblioteca")
         self.assertTrue(fake_streamlit.html_fragments)
         self.assertIn("<style>", fake_streamlit.html_fragments[0])
         self.assertNotIn("<script", fake_streamlit.html_fragments[0].lower())
@@ -159,9 +159,9 @@ class NavigationTests(unittest.TestCase):
         self.assertTrue(any("esceniq-home-hero" in fragment for fragment in fake_streamlit.html_fragments))
         self.assertTrue(any("esceniq-capabilities" in fragment for fragment in fake_streamlit.html_fragments))
 
-    def test_navigation_labels_include_icons_and_identify_pending_sections(self):
+    def test_navigation_labels_include_icons_and_identify_only_pending_sections(self):
         self.assertEqual(set(app.NAVIGATION_LABELS), set(app.NAVIGATION_PAGES))
-        self.assertIn("Próximamente", app.NAVIGATION_LABELS["Biblioteca"])
+        self.assertNotIn("Próximamente", app.NAVIGATION_LABELS["Biblioteca"])
         self.assertIn("Próximamente", app.NAVIGATION_LABELS["Informes"])
         self.assertIn("Próximamente", app.NAVIGATION_LABELS["Configuración"])
 
@@ -234,6 +234,7 @@ class NavigationTests(unittest.TestCase):
             patch.object(app, "render_home_page") as home,
             patch.object(app, "render_analysis_page") as analysis,
             patch.object(app, "render_results_page") as results,
+            patch.object(app, "render_library_page") as library,
             patch.object(app, "render_unavailable_page") as unavailable,
             patch.object(app, "render_models_page") as models,
         ):
@@ -244,7 +245,8 @@ class NavigationTests(unittest.TestCase):
         home.assert_called_once()
         analysis.assert_called_once()
         results.assert_called_once()
-        self.assertEqual(unavailable.call_count, 3)
+        library.assert_called_once()
+        self.assertEqual(unavailable.call_count, 2)
         models.assert_called_once()
 
 

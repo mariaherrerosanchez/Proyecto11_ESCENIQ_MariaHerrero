@@ -37,9 +37,13 @@ El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ES
 
 Cada inferencia completada se guarda automáticamente en SQLite con vídeo, modo, modelo, parámetros, detecciones y exposiciones reales. La base no almacena el vídeo original ni las evidencias visuales. Por defecto se crea en `%LOCALAPPDATA%\ESCENIQ\esceniq.sqlite3`; puede configurarse antes de iniciar Streamlit con `ESCENIQ_DATABASE_PATH`. Un error de SQLite muestra una advertencia, pero conserva el resultado de la sesión actual.
 
+En **Biblioteca** se listan los análisis del más reciente al más antiguo. Al abrir uno se recuperan directamente de SQLite sus parámetros, detecciones y métricas de exposición, sin volver a ejecutar YOLO. Las evidencias JPEG no se persisten: el historial lo indica explícitamente en lugar de reconstruirlas o simularlas.
+
 ## Exportación CSV
 
 En **Resultados**, un análisis con marcas agregadas ofrece **Descargar CSV**. El archivo usa UTF-8 con BOM y separador `;` para abrirse correctamente en Excel en español. Incluye por marca el vídeo seleccionado, detecciones, muestras positivas, exposición estimada, porcentaje, apariciones, modelo, umbral e intervalo de muestreo. La descarga reutiliza el resultado actual y su exposición ya calculada; no vuelve a ejecutar YOLO. Si no existen marcas agregadas o se trata de una prueba técnica, no se ofrece CSV.
+
+Los análisis guardados que incluyen exposición por marca ofrecen la misma descarga desde **Biblioteca**, reutilizando los datos persistidos.
 
 ## Piloto de entrenamiento Eggo
 
