@@ -214,6 +214,10 @@ tempCodeRunnerFile.py
 *.onnx
 runs/
 
+# Persistencia local de análisis.
+*.sqlite3
+*.sqlite3-*
+
 # Ruff stuff:
 .ruff_cache/
 

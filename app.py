@@ -22,6 +22,7 @@ from esceniq.vision import (
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
 from esceniq.reports import build_results_csv
+from esceniq.storage import SqliteAnalysisRepository, StorageError
 from esceniq.ui import (
     apply_brand_styles,
     render_capability_showcase,
@@ -147,6 +148,19 @@ def clear_inference_result() -> None:
     """Evita que un análisis anterior se presente durante una nueva ejecución."""
     st.session_state.pop("inference_result", None)
     st.session_state.pop("inference_result_key", None)
+    st.session_state.pop("persisted_analysis_id", None)
+
+
+def persist_completed_analysis(result, *, video_name: str, analysis_key: tuple[object, ...]) -> str:
+    """Persiste una inferencia ya completada sin volver a ejecutar YOLO."""
+    exposure = None if result.mode is InferenceMode.TECHNICAL_TEST else calculate_exposure(result)
+    deduplication_key = sha256(repr(analysis_key).encode("utf-8")).hexdigest()
+    return SqliteAnalysisRepository().save_completed_analysis(
+        result,
+        exposure,
+        video_name=video_name,
+        deduplication_key=deduplication_key,
+    )
 
 
 def render_inference_error(error: Exception) -> None:
@@ -385,6 +399,17 @@ def render_analysis_page() -> None:
                         progress.progress(100, text="Inferencia terminada.")
                         st.session_state["inference_result"] = result
                         st.session_state["inference_result_key"] = selected_analysis_key
+                        try:
+                            st.session_state["persisted_analysis_id"] = persist_completed_analysis(
+                                result,
+                                video_name=uploaded_video.name,
+                                analysis_key=selected_analysis_key,
+                            )
+                        except StorageError as error:
+                            st.warning(
+                                "El análisis terminó correctamente, pero no se pudo guardar en SQLite. "
+                                f"El resultado actual sigue disponible en esta sesión. Detalle: {error}"
+                            )
                     except (InferenceError, ExposureError) as error:
                         render_inference_error(error)
             result = (
