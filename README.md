@@ -41,7 +41,9 @@ El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ES
 
 Cada inferencia completada se guarda automáticamente en SQLite con vídeo, modo, modelo, parámetros, detecciones y exposiciones reales. La base no almacena el vídeo original ni las evidencias visuales. Por defecto se crea en `%LOCALAPPDATA%\ESCENIQ\esceniq.sqlite3`; puede configurarse antes de iniciar Streamlit con `ESCENIQ_DATABASE_PATH`. Un error de SQLite muestra una advertencia, pero conserva el resultado de la sesión actual.
 
-En **Biblioteca** se listan los análisis del más reciente al más antiguo. Al abrir uno se recuperan directamente de SQLite sus parámetros, detecciones y métricas de exposición, sin volver a ejecutar YOLO. Las evidencias JPEG no se persisten: el historial lo indica explícitamente en lugar de reconstruirlas o simularlas.
+En **Biblioteca** se listan los análisis del más reciente al más antiguo. Al abrir uno se recuperan directamente de SQLite sus parámetros, detecciones y métricas de exposición, sin volver a ejecutar YOLO.
+
+Cada análisis puede conservar hasta 24 evidencias JPEG anotadas, con cajas y etiquetas, en `%LOCALAPPDATA%\ESCENIQ\evidences` (o en la carpeta indicada por `ESCENIQ_EVIDENCE_DIRECTORY`). SQLite guarda únicamente la ruta relativa y sus metadatos —fotograma, timestamp, marca, confianza y estado de revisión—, nunca los binarios ni el vídeo original. Los análisis históricos sin evidencias siguen siendo válidos; si un JPEG falta o está corrupto, Biblioteca muestra un aviso sin alterar las métricas.
 
 ## Exportación CSV
 

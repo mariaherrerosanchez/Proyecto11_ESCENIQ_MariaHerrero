@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from esceniq.analytics import ExposureSummary
 from esceniq.vision import InferenceResult
+from esceniq.vision.evidence import MAX_EVIDENCE_FRAMES
 
 
 class StorageError(RuntimeError):
@@ -41,6 +42,18 @@ class StoredExposure:
 
 
 @dataclass(frozen=True)
+class StoredEvidence:
+    """Referencia SQLite a un JPEG local anotado, nunca el binario de la imagen."""
+
+    frame_index: int
+    timestamp_seconds: float
+    brand_name: str | None
+    confidence: float | None
+    file_path: str
+    review_status: str
+
+
+@dataclass(frozen=True)
 class AnalysisListItem:
     analysis_id: str
     created_at: datetime
@@ -67,6 +80,7 @@ class StoredAnalysis:
     elapsed_seconds: float
     detections: tuple[StoredDetection, ...]
     exposures: tuple[StoredExposure, ...]
+    evidences: tuple[StoredEvidence, ...]
 
 
 def default_database_path() -> Path:
@@ -153,6 +167,16 @@ class SqliteAnalysisRepository:
             last_detection_seconds REAL NOT NULL,
             appearance_count INTEGER NOT NULL,
             PRIMARY KEY (analysis_id, brand_name)
+        );
+        CREATE TABLE IF NOT EXISTS evidences (
+            analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+            frame_index INTEGER NOT NULL,
+            timestamp_seconds REAL NOT NULL,
+            brand_name TEXT,
+            confidence REAL,
+            file_path TEXT NOT NULL,
+            review_status TEXT NOT NULL,
+            PRIMARY KEY (analysis_id, frame_index)
         );
         CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses(created_at DESC);
         """
@@ -295,6 +319,53 @@ class SqliteAnalysisRepository:
             for row in rows
         )
 
+    def save_evidence(
+        self,
+        analysis_id: str,
+        *,
+        frame_index: int,
+        timestamp_seconds: float,
+        brand_name: str | None,
+        confidence: float | None,
+        file_path: str,
+        review_status: str,
+    ) -> bool:
+        """Registra una evidencia externa y evita duplicados de reruns por fotograma."""
+        self.initialize()
+        try:
+            with self._connection() as connection:
+                existing = connection.execute(
+                    "SELECT 1 FROM evidences WHERE analysis_id = ? AND frame_index = ?",
+                    (analysis_id, frame_index),
+                ).fetchone()
+                if existing is not None:
+                    return False
+                count = connection.execute(
+                    "SELECT COUNT(*) AS count FROM evidences WHERE analysis_id = ?", (analysis_id,)
+                ).fetchone()["count"]
+                if count >= MAX_EVIDENCE_FRAMES:
+                    return False
+                connection.execute(
+                    """
+                    INSERT INTO evidences (
+                        analysis_id, frame_index, timestamp_seconds, brand_name, confidence,
+                        file_path, review_status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        analysis_id,
+                        frame_index,
+                        timestamp_seconds,
+                        brand_name,
+                        confidence,
+                        file_path,
+                        review_status,
+                    ),
+                )
+        except sqlite3.Error as error:
+            raise StorageError("No se pudo guardar la referencia de evidencia visual.") from error
+        return True
+
     def get_analysis(self, analysis_id: str) -> StoredAnalysis | None:
         """Recupera un análisis completo por identificador, listo para la futura Biblioteca."""
         self.initialize()
@@ -308,6 +379,9 @@ class SqliteAnalysisRepository:
                 ).fetchall()
                 exposures = connection.execute(
                     "SELECT * FROM brand_exposures WHERE analysis_id = ? ORDER BY brand_name", (analysis_id,)
+                ).fetchall()
+                evidences = connection.execute(
+                    "SELECT * FROM evidences WHERE analysis_id = ? ORDER BY frame_index", (analysis_id,)
                 ).fetchall()
         except sqlite3.Error as error:
             raise StorageError("No se pudo recuperar el análisis guardado.") from error
@@ -327,6 +401,7 @@ class SqliteAnalysisRepository:
             elapsed_seconds=analysis["elapsed_seconds"],
             detections=tuple(self._stored_detection(row) for row in detections),
             exposures=tuple(self._stored_exposure(row) for row in exposures),
+            evidences=tuple(self._stored_evidence(row) for row in evidences),
         )
 
     @staticmethod
@@ -351,4 +426,15 @@ class SqliteAnalysisRepository:
             first_detection_seconds=row["first_detection_seconds"],
             last_detection_seconds=row["last_detection_seconds"],
             appearance_count=row["appearance_count"],
+        )
+
+    @staticmethod
+    def _stored_evidence(row: sqlite3.Row) -> StoredEvidence:
+        return StoredEvidence(
+            frame_index=row["frame_index"],
+            timestamp_seconds=row["timestamp_seconds"],
+            brand_name=row["brand_name"],
+            confidence=row["confidence"],
+            file_path=row["file_path"],
+            review_status=row["review_status"],
         )

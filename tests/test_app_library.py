@@ -39,6 +39,9 @@ class FakeStreamlit:
     def caption(self, *_args, **_kwargs):
         pass
 
+    def subheader(self, *_args, **_kwargs):
+        pass
+
 
 class FakeRepository:
     def __init__(self, analyses=(), analysis=None, error=None):
@@ -128,6 +131,17 @@ class LibraryPageTests(unittest.TestCase):
             app.render_library_page()
 
         self.assertIn("ya no está disponible", fake_streamlit.warnings[0])
+
+    def test_historical_analysis_without_evidences_has_a_clear_state(self):
+        fake_streamlit = FakeStreamlit()
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_stored_evidence_gallery(SimpleNamespace(evidences=()))
+
+        self.assertEqual(
+            fake_streamlit.infos,
+            ["Este análisis histórico no tiene evidencias visuales guardadas."],
+        )
 
     @patch.object(app, "build_stored_results_csv", return_value=b"csv-guardado")
     def test_saved_analysis_csv_reuses_the_persisted_data(self, build_csv):

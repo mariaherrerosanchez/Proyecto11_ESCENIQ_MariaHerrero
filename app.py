@@ -22,7 +22,12 @@ from esceniq.vision import (
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
 from esceniq.reports import build_results_csv, build_stored_results_csv
-from esceniq.storage import SqliteAnalysisRepository, StorageError
+from esceniq.storage import (
+    EvidenceFileStore,
+    EvidenceStorageError,
+    SqliteAnalysisRepository,
+    StorageError,
+)
 from esceniq.ui import (
     apply_brand_styles,
     render_capability_showcase,
@@ -187,6 +192,35 @@ def persist_completed_analysis(result, *, video_name: str, analysis_key: tuple[o
         video_name=video_name,
         deduplication_key=deduplication_key,
     )
+
+
+def persist_analysis_evidences(analysis_id: str, result) -> None:
+    """Guarda JPEGs anotados de evidencias ya producidas, sin ejecutar YOLO de nuevo."""
+    repository = SqliteAnalysisRepository()
+    file_store = EvidenceFileStore()
+    for evidence in result.evidences:
+        frame_detections = tuple(
+            detection for detection in result.detections if detection.frame_index == evidence.frame_index
+        )
+        if not frame_detections:
+            continue
+        primary_detection = max(frame_detections, key=lambda detection: detection.confidence)
+        annotated_jpeg = render_evidence_jpeg(
+            evidence,
+            frame_detections,
+            show_labels=True,
+            cv2=cv2,
+        )
+        file_path = file_store.write(analysis_id, evidence.frame_index, annotated_jpeg)
+        repository.save_evidence(
+            analysis_id,
+            frame_index=evidence.frame_index,
+            timestamp_seconds=evidence.timestamp_seconds,
+            brand_name=primary_detection.brand_name,
+            confidence=primary_detection.confidence,
+            file_path=file_path,
+            review_status=evidence.review_status,
+        )
 
 
 def render_inference_error(error: Exception) -> None:
@@ -446,10 +480,11 @@ def render_analysis_page() -> None:
                                 video_name=uploaded_video.name,
                                 analysis_key=selected_analysis_key,
                             )
-                        except StorageError as error:
+                            persist_analysis_evidences(st.session_state["persisted_analysis_id"], result)
+                        except (StorageError, EvidenceStorageError, ValueError, cv2.error) as error:
                             st.warning(
-                                "El análisis terminó correctamente, pero no se pudo guardar en SQLite. "
-                                f"El resultado actual sigue disponible en esta sesión. Detalle: {error}"
+                                "El análisis terminó correctamente, pero no se pudieron conservar todos sus datos "
+                                f"persistentes. El resultado actual sigue disponible en esta sesión. Detalle: {error}"
                             )
                     except (InferenceError, ExposureError) as error:
                         render_inference_error(error)
@@ -572,7 +607,34 @@ def render_library_analysis(analysis) -> None:
         )
     else:
         st.info("El análisis se guardó correctamente sin detecciones.")
-    st.caption("Las evidencias visuales no se guardan en SQLite; no se reconstruyen ni se simulan desde el historial.")
+    render_stored_evidence_gallery(analysis)
+
+
+def render_stored_evidence_gallery(analysis) -> None:
+    """Muestra JPEGs anotados recuperados localmente, sin reconstruir ni inferir nada."""
+    st.subheader("Evidencias visuales guardadas")
+    if not analysis.evidences:
+        st.info("Este análisis histórico no tiene evidencias visuales guardadas.")
+        return
+    file_store = EvidenceFileStore()
+    st.caption(f"Hasta {MAX_EVIDENCE_FRAMES} fotogramas anotados conservados localmente para este análisis.")
+    for start in range(0, len(analysis.evidences), 3):
+        for column, evidence in zip(st.columns(3), analysis.evidences[start : start + 3], strict=False):
+            with column.container(border=True):
+                try:
+                    image = file_store.read(evidence.file_path)
+                except EvidenceStorageError as error:
+                    column.warning(
+                        f"Evidencia no disponible en {format_duration(evidence.timestamp_seconds)}. {error}"
+                    )
+                    continue
+                column.image(image, use_container_width=True)
+                label = evidence.brand_name or "Clase técnica"
+                confidence = "" if evidence.confidence is None else f" · {evidence.confidence:.0%}"
+                column.caption(
+                    f"{format_duration(evidence.timestamp_seconds)} · {label}{confidence}\n\n"
+                    f"{evidence.review_status}"
+                )
 
 
 def render_library_page() -> None:
