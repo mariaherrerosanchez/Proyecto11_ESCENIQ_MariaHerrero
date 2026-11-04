@@ -148,6 +148,34 @@ class InferenceResultRenderingTests(unittest.TestCase):
         self.assertEqual(fake_streamlit.errors, ["fallo de inferencia"])
         self.assertEqual(fake_streamlit.infos, [])
 
+    @patch.object(app, "render_brand_timeline")
+    def test_timeline_uses_real_detection_timestamps_without_running_inference(self, render_timeline):
+        fake_streamlit = FakeStreamlit()
+        detection = SimpleNamespace(brand_name="Coca-Cola", frame_index=10, timestamp_seconds=1.0)
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_detection_timeline(
+                (detection,), duration_seconds=3.0, sample_interval_seconds=1.0
+            )
+
+        intervals = render_timeline.call_args.args[1]
+        self.assertEqual((intervals[0].brand_name, intervals[0].start_seconds, intervals[0].end_seconds), ("Coca-Cola", 1.0, 2.0))
+        self.assertEqual(render_timeline.call_args.kwargs["duration_seconds"], 3.0)
+
+    def test_timeline_without_brands_has_an_explicit_empty_state(self):
+        fake_streamlit = FakeStreamlit()
+        detection = SimpleNamespace(brand_name=None, frame_index=10, timestamp_seconds=1.0)
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_detection_timeline(
+                (detection,), duration_seconds=3.0, sample_interval_seconds=1.0
+            )
+
+        self.assertEqual(
+            fake_streamlit.infos,
+            ["No hay detecciones de marca con información temporal para mostrar en la línea temporal."],
+        )
+
     @patch.object(app, "build_results_csv")
     def test_csv_download_uses_real_result_and_current_video_name(self, build_results_csv):
         build_results_csv.return_value = b"csv-real"

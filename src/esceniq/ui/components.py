@@ -4,8 +4,11 @@ from __future__ import annotations
 from base64 import b64encode
 from collections.abc import Sequence
 from functools import lru_cache
+from html import escape
 from pathlib import Path
 from typing import Any
+
+from esceniq.analytics.timeline import AppearanceInterval
 
 
 THEME_DARK = "dark"
@@ -140,6 +143,22 @@ button[kind="primary"]:hover { background: var(--esceniq-lime); color: #152400; 
 [data-testid="stDataFrame"], [data-testid="stTable"], [data-testid="stDataEditor"] { background: var(--esceniq-surface); color: var(--esceniq-text); }
 [data-testid="stDataFrame"] * { color: var(--esceniq-text); }
 [data-testid="stAlert"] { background: var(--esceniq-surface-strong); color: var(--esceniq-text); }
+.esceniq-timeline { margin: .75rem 0 1.35rem; padding: 1.1rem; border: 1px solid var(--esceniq-border); border-radius: 14px; background: linear-gradient(135deg, var(--esceniq-surface), var(--esceniq-surface-strong)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+.esceniq-timeline__legend { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin: 0 0 1rem; color: var(--esceniq-muted); font-size: .78rem; }
+.esceniq-timeline__legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.esceniq-timeline__dot { width: .58rem; height: .58rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+.esceniq-timeline__row { display: grid; grid-template-columns: minmax(92px, 150px) 1fr; gap: .7rem; align-items: start; padding: .6rem 0; border-top: 1px solid var(--esceniq-border); }
+.esceniq-timeline__row:first-of-type { border-top: 0; }
+.esceniq-timeline__brand { padding-top: .18rem; color: var(--esceniq-text); font-size: .82rem; font-weight: 750; }
+.esceniq-timeline__track { position: relative; min-height: 2.2rem; overflow: hidden; border: 1px solid var(--esceniq-border); border-radius: 9px; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 1px), var(--esceniq-border) calc(25% - 1px), var(--esceniq-border) 25%); }
+.esceniq-timeline__appearance { position: absolute; top: .48rem; min-width: 4px; height: 1.16rem; border-radius: 5px; background: currentColor; box-shadow: 0 0 12px currentColor; opacity: .88; }
+.esceniq-timeline__times { display: flex; flex-wrap: wrap; gap: .28rem .5rem; margin-top: .35rem; color: var(--esceniq-muted); font-size: .73rem; }
+.esceniq-timeline__times code { padding: .14rem .32rem; border-radius: 4px; background: var(--esceniq-background); color: inherit; }
+.esceniq-timeline__tone-0 { color: var(--esceniq-turquoise); }
+.esceniq-timeline__tone-1 { color: var(--esceniq-lime); }
+.esceniq-timeline__tone-2 { color: var(--esceniq-coral); }
+.esceniq-timeline__tone-3 { color: #8faeff; }
+.esceniq-timeline__tone-4 { color: #c5a7ff; }
 @keyframes esceniq-reveal {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
@@ -167,6 +186,7 @@ button[kind="primary"]:hover { background: var(--esceniq-lime); color: #152400; 
   .st-key-home-real-cta { margin-top: -5.35rem; margin-left: 1.4rem; }
   .esceniq-home-hero__frame { display: none; }
   .esceniq-capabilities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .esceniq-timeline__row { grid-template-columns: 1fr; gap: .25rem; }
 }
 </style>
 """
@@ -281,6 +301,64 @@ def render_metric_cards(streamlit: Any, metrics: Sequence[tuple[str, str | int |
     """Presenta métricas reales en una cuadrícula responsive de Streamlit."""
     for column, (label, value) in zip(streamlit.columns(len(metrics)), metrics, strict=True):
         column.metric(label, value)
+
+
+def _format_timeline_seconds(seconds: float) -> str:
+    minutes, remaining_seconds = divmod(seconds, 60)
+    return f"{int(minutes):02d}:{remaining_seconds:05.2f}"
+
+
+def render_brand_timeline(
+    streamlit: Any,
+    intervals: Sequence[AppearanceInterval],
+    *,
+    duration_seconds: float,
+    sample_interval_seconds: float,
+) -> None:
+    """Renderiza tramos reales de exposición estimada sin JavaScript ni datos ficticios."""
+    if not intervals:
+        streamlit.info("No hay detecciones de marca con información temporal para mostrar en la línea temporal.")
+        return
+    grouped: dict[str, list[AppearanceInterval]] = {}
+    for interval in intervals:
+        grouped.setdefault(interval.brand_name, []).append(interval)
+    rows: list[str] = []
+    legend: list[str] = []
+    for index, (brand_name, brand_intervals) in enumerate(grouped.items()):
+        tone = index % 5
+        safe_brand = escape(brand_name)
+        legend.append(
+            f'<span class="esceniq-timeline__tone-{tone}"><i class="esceniq-timeline__dot"></i>{safe_brand}</span>'
+        )
+        markers: list[str] = []
+        labels: list[str] = []
+        for interval in brand_intervals:
+            left = max(0.0, min(100.0, 100 * interval.start_seconds / duration_seconds))
+            width = max(0.15, min(100.0 - left, 100 * interval.estimated_seconds / duration_seconds))
+            start = _format_timeline_seconds(interval.start_seconds)
+            end = _format_timeline_seconds(interval.end_seconds)
+            description = f"{safe_brand}: {start} a {end}; {interval.positive_sample_count} muestra(s) positiva(s)"
+            markers.append(
+                f'<span class="esceniq-timeline__appearance esceniq-timeline__tone-{tone}" '
+                f'style="left:{left:.4f}%;width:{width:.4f}%" title="{description}"></span>'
+            )
+            labels.append(
+                f"<code>{start} → {end} · {interval.estimated_seconds:.2f} s estimados</code>"
+            )
+        rows.append(
+            f'<div class="esceniq-timeline__row"><div class="esceniq-timeline__brand esceniq-timeline__tone-{tone}">{safe_brand}</div>'
+            f'<div><div class="esceniq-timeline__track" aria-label="Tramos estimados de {safe_brand}">{"".join(markers)}</div>'
+            f'<div class="esceniq-timeline__times">{"".join(labels)}</div></div></div>'
+        )
+    streamlit.subheader("Línea temporal de apariciones")
+    streamlit.caption(
+        f"Tramos estimados a partir de muestras cada {sample_interval_seconds:g} s. "
+        "No confirman presencia continua entre muestras ni modifican la exposición calculada."
+    )
+    streamlit.html(
+        '<section class="esceniq-timeline" aria-label="Línea temporal estimada de marcas">'
+        f'<div class="esceniq-timeline__legend">{"".join(legend)}</div>{"".join(rows)}</section>'
+    )
 
 
 def render_information_cards(

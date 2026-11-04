@@ -38,6 +38,8 @@ class ThemeStyleTests(unittest.TestCase):
         self.assertIn('[data-testid="stHeader"] { background: var(--esceniq-background) !important; }', light_styles)
         self.assertIn('[data-testid="stHeader"] button *', light_styles)
         self.assertIn("prefers-reduced-motion", dark_styles)
+        self.assertIn(".esceniq-timeline", light_styles)
+        self.assertIn(".esceniq-timeline__tone-0", dark_styles)
         self.assertNotIn("<script", light_styles.lower())
 
     def test_invalid_theme_falls_back_to_dark(self):
