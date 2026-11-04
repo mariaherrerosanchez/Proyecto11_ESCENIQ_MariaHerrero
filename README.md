@@ -2,17 +2,30 @@
 
 Computer Vision para detectar marcas en vídeos y analizar su tiempo de exposición mediante YOLO.
 
-## Ejecutar la primera pantalla
+## Ejecutar ESCENIQ
 
-Requiere Python 3.11 o posterior. Crear y activar un entorno virtual, instalar las dependencias y ejecutar:
+Requiere Python 3.11 o posterior. Crear y activar un entorno virtual, instalar las dependencias e iniciar Streamlit:
 
-```powershell
-python -m pip install -r requirements.txt
-$env:PYTHONPATH = "src"
-streamlit run app.py
-```
+~~~powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\streamlit.exe run app.py
+~~~
 
 La pantalla **Analizar vídeo** valida localmente un MP4, muestra sus metadatos y permite visualizarlo. También puede ejecutar inferencia por muestreo con una ruta local a pesos YOLO: no descarga modelos ni sube el archivo a servicios externos.
+
+## Funcionalidades implementadas
+
+- Carga local de MP4, validación, inferencia YOLO por muestreo y estados de error claros.
+- Evidencias visuales reales, exposición estimada por marca, Resultados y CSV para filas reales.
+- Persistencia local en SQLite, Biblioteca de análisis y JPEGs anotados recuperables.
+- Navegación, documentación de modelos y cuatro modos: técnico, Eggo experimental, Coca-Cola experimental y validación estricta del catálogo oficial.
+
+## Funcionalidades pendientes
+
+- No hay pesos multiclase completos ni evaluación independiente para las cinco marcas oficiales.
+- Informes, Configuración, selector claro/oscuro, línea temporal y comparación de análisis no están implementados.
+- No hay entrenamiento, reentrenamiento ni verificación humana automática desde Streamlit.
 
 La aplicación separa cuatro modos de inferencia:
 
@@ -24,6 +37,16 @@ La aplicación separa cuatro modos de inferencia:
 ## Modelos e IA
 
 La sección **Modelos e IA** distingue los detectores experimentales de los validados: Coca-Cola y Eggo son pilotos monoclase locales; la prueba técnica no identifica marcas; el catálogo multiclase de cinco marcas es un objetivo y no declara un peso completo entrenado. La pantalla explica YOLO, las métricas de detección y exposición, el efecto del umbral y del muestreo, y las limitaciones de falsos positivos, falsos negativos e iluminación. No muestra métricas de Coca-Cola porque el repositorio no contiene una evaluación independiente verificable de ese piloto.
+
+## Configurar el piloto Coca-Cola
+
+Los pesos no se incluyen en Git. Selecciona **Coca-Cola experimental (1 clase)** y proporciona en la interfaz una ruta local a un archivo best.pt que exponga exclusivamente la clase 0 = coca-cola. La ruta usada durante el piloto local fue:
+
+~~~text
+C:\ESCENIQ_Datasets\CocaCola_training_runs\cocacola_yolo11n_pilot_e50_img640_b8_s42\weights\best.pt
+~~~
+
+Si falta el archivo, ESCENIQ muestra un error y no crea un análisis completado. El piloto puede producir falsos positivos; sus métricas de exposición son experimentales y no prueban rendimiento generalizable.
 
 ## Evidencias visuales
 
@@ -55,6 +78,22 @@ Los análisis guardados que incluyen exposición por marca ofrecen la misma desc
 
 El procedimiento, resultados y limitaciones del piloto de una sola clase están documentados en [la documentación del experimento](docs/datasets/eggo_training_pilot.md). Sus pesos y datos se mantienen fuera del repositorio. Este piloto **no** cumple aún el requisito del modelo oficial ESCENIQ de cinco marcas ni permite concluir que otras marcas estén ausentes de un vídeo.
 
+## Pruebas y demo
+
+Ejecuta la suite completa desde la raíz del repositorio:
+
+~~~powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+~~~
+
+Para comprobar específicamente catálogo, exposición, errores de inferencia, SQLite y evidencias:
+
+~~~powershell
+.\.venv\Scripts\python.exe -m unittest tests.test_brand_classes tests.test_exposure tests.test_yolo_inference tests.test_sqlite_repository tests.test_evidence_files
+~~~
+
+La guía de demostración de cinco minutos para Coca-Cola experimental está en [docs/demo_cocacola_experimental.md](docs/demo_cocacola_experimental.md). Usa únicamente un MP4 autorizado, reservado y no publicado; no añadas vídeos, pesos, bases SQLite ni JPEGs de demo al repositorio.
+
 ## Revisión visual de anotaciones Eggo
 
 La galería local de revisión no modifica imágenes ni etiquetas y deja sus resultados fuera del repositorio. En Windows:
@@ -69,10 +108,3 @@ El HTML muestra las 44 candidatas con sus cajas y deja las seis exclusiones en u
 Haz clic en una imagen candidata para abrir el editor. Selecciona una caja para arrastrarla; usa sus controles amarillos para redimensionarla, **Añadir caja** para dibujar una nueva y **Eliminar caja seleccionada** para retirarla. Selecciona una decisión (aprobar, corregir, excluir o sin decisión) y, opcionalmente, añade notas. Los cambios permanecen exclusivamente en la memoria del navegador y el aviso superior indica los cambios pendientes.
 
 Para conservar la revisión, pulsa **Exportar JSON de revisión**. El archivo descargado contiene solo el nombre de cada candidata, su decisión, notas y cajas YOLO normalizadas; no modifica PNG, TXT ni manifiestos. Más adelante, usa **Importar JSON** para cargarlo de nuevo en el editor y seguir revisando. Importar tampoco escribe en el dataset: vuelve a exportar el JSON cuando quieras guardar la nueva versión.
-
-Para las pruebas:
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m pytest -q
-```

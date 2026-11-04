@@ -150,6 +150,17 @@ class NavigationTests(unittest.TestCase):
         self.assertTrue(app.FAVICON_PATH.is_file())
         self.assertTrue(app.HERO_IMAGE_PATH.is_file())
 
+    def test_cocacola_demo_mode_uses_only_its_local_experimental_weight_suggestion(self):
+        self.assertEqual(
+            app.inference_mode_from_label("Coca-Cola experimental (1 clase)"),
+            app.InferenceMode.COCACOLA_EXPERIMENTAL,
+        )
+        self.assertEqual(
+            app.suggested_model_path(app.InferenceMode.COCACOLA_EXPERIMENTAL),
+            app.COCACOLA_EXPERIMENTAL_MODEL_PATH,
+        )
+        self.assertEqual(app.suggested_model_path(app.InferenceMode.ESCENIQ), "")
+
     def test_home_empty_state_does_not_render_metrics(self):
         fake_streamlit = FakeStreamlit()
 
