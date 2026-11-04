@@ -24,8 +24,12 @@ La pantalla **Analizar vídeo** valida localmente un MP4, muestra sus metadatos 
 ## Funcionalidades pendientes
 
 - No hay pesos multiclase completos ni evaluación independiente para las cinco marcas oficiales.
-- Informes, Configuración, selector claro/oscuro, línea temporal y comparación de análisis no están implementados.
+- Informes, Configuración, línea temporal y comparación de análisis no están implementados.
 - No hay entrenamiento, reentrenamiento ni verificación humana automática desde Streamlit.
+
+## Tema visual
+
+El botón de sol o luna de la esquina superior derecha alterna entre las paletas clara y oscura sin modificar resultados. Está disponible en todas las secciones y la selección se conserva durante la navegación en la sesión, además de añadirse como parámetro theme a la URL para recuperarla al recargar la página. No se usa almacenamiento de navegador ni JavaScript; por ello, abrir una URL nueva sin ese parámetro comienza en modo oscuro.
 
 La aplicación separa cuatro modos de inferencia:
 

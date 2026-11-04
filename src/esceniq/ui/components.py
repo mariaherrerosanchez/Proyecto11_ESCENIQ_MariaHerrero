@@ -8,27 +8,99 @@ from pathlib import Path
 from typing import Any
 
 
-_BRAND_STYLES = """
-<style>
+THEME_DARK = "dark"
+THEME_LIGHT = "light"
+THEMES = (THEME_DARK, THEME_LIGHT)
+
+_THEME_VARIABLES = {
+    THEME_DARK: """
 :root {
+  --esceniq-background: #09131c;
   --esceniq-surface: #101a24;
   --esceniq-surface-strong: #132230;
+  --esceniq-sidebar: #0d1b26;
   --esceniq-border: #284052;
+  --esceniq-hover: #183041;
+  --esceniq-active: #1a4850;
+  --esceniq-text: #edf7f8;
+  --esceniq-muted: #a9c1c8;
+  --esceniq-input: #0d1b26;
+  --esceniq-hero-base: #07141d;
+  --esceniq-hero-veil: #09202c;
+  --esceniq-card-start: rgba(16, 37, 49, .98);
+  --esceniq-card-end: rgba(8, 22, 31, .98);
+  --esceniq-card-hover-start: rgba(21, 60, 70, .98);
+  --esceniq-card-hover-end: rgba(10, 29, 38, .98);
   --esceniq-turquoise: #42d8d2;
   --esceniq-lime: #bef264;
   --esceniq-coral: #ff8967;
-  --esceniq-text: #edf7f8;
+  --esceniq-selected-text: #bef264;
+  --esceniq-sidebar-text: #edf7f8;
+  --esceniq-sidebar-caption: #a9c1c8;
+  --esceniq-sidebar-disabled: #a9c1c8;
 }
-.stApp { background: #09131c; color: var(--esceniq-text); }
-[data-testid="stSidebar"] { background: #0d1b26; border-right: 1px solid var(--esceniq-border); }
+""",
+    THEME_LIGHT: """
+:root {
+  --esceniq-background: #edf5f5;
+  --esceniq-surface: #ffffff;
+  --esceniq-surface-strong: #e2eff0;
+  --esceniq-sidebar: #e5f1f2;
+  --esceniq-border: #91b4ba;
+  --esceniq-hover: #d3e8e8;
+  --esceniq-active: #b9dddd;
+  --esceniq-text: #102a33;
+  --esceniq-muted: #46636c;
+  --esceniq-input: #ffffff;
+  --esceniq-hero-base: #07141d;
+  --esceniq-hero-veil: #09202c;
+  --esceniq-card-start: rgba(255, 255, 255, .98);
+  --esceniq-card-end: rgba(230, 242, 242, .98);
+  --esceniq-card-hover-start: rgba(246, 255, 255, .98);
+  --esceniq-card-hover-end: rgba(211, 238, 237, .98);
+  --esceniq-turquoise: #087f83;
+  --esceniq-lime: #597b00;
+  --esceniq-coral: #c24d35;
+  --esceniq-selected-text: #087f83;
+  --esceniq-sidebar-text: #102a33;
+  --esceniq-sidebar-caption: #294850;
+  --esceniq-sidebar-disabled: #4d6268;
+}
+.st-key-theme_toggle_button button,
+.st-key-theme_toggle_button button * { color: #ffffff !important; }
+""",
+}
+
+
+_BRAND_STYLES = """
+<style>
+/* ESCENIQ_THEME_VARIABLES */
+.stApp, [data-testid="stAppViewContainer"] { background: var(--esceniq-background); color: var(--esceniq-text); }
+[data-testid="stHeader"] { background: var(--esceniq-background) !important; }
+[data-testid="stHeader"] button,
+[data-testid="stHeader"] button * { background: transparent; color: var(--esceniq-text) !important; }
+[data-testid="stHeader"] button:hover { background: var(--esceniq-hover) !important; }
+[data-testid="stSidebar"] { background: var(--esceniq-sidebar); border-right: 1px solid var(--esceniq-border); }
 [data-testid="stSidebar"] [data-testid="stImage"] { margin: .25rem .2rem .7rem; }
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] label,
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] label * { color: var(--esceniq-sidebar-text) !important; }
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] [data-testid="stCaptionContainer"] * { color: var(--esceniq-sidebar-caption) !important; }
 [data-testid="stSidebar"] [data-testid="stRadio"] label { border-radius: 9px; padding: .38rem .45rem; }
-[data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #183041; }
-[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) { background: #1a4850; color: var(--esceniq-lime); }
-.esceniq-home-hero { position: relative; min-height: 495px; overflow: hidden; border: 1px solid rgba(66, 216, 210, .42); border-radius: 18px; background: #07141d; box-shadow: 0 26px 64px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .05); animation: esceniq-reveal .48s ease both; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:disabled),
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:disabled) *,
+[data-testid="stSidebar"] [data-testid="stRadio"] label[aria-disabled="true"],
+[data-testid="stSidebar"] [data-testid="stRadio"] label[aria-disabled="true"] * { color: var(--esceniq-sidebar-disabled) !important; opacity: 1; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: var(--esceniq-hover); }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) { background: var(--esceniq-active); }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked),
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p,
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) span,
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) * { color: var(--esceniq-selected-text) !important; }
+.esceniq-home-hero { position: relative; min-height: 495px; overflow: hidden; border: 1px solid rgba(66, 216, 210, .42); border-radius: 18px; background: var(--esceniq-hero-base); box-shadow: 0 26px 64px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .05); animation: esceniq-reveal .48s ease both; }
 .esceniq-home-hero__photo { position: absolute; inset: 0 0 0 37%; display: grid; place-items: center; background: radial-gradient(circle at 45% 45%, rgba(66, 216, 210, .19), transparent 48%); }
 .esceniq-home-hero__photo img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; filter: saturate(1.1) contrast(1.05); }
-.esceniq-home-hero__veil { position: absolute; inset: 0; background: linear-gradient(90deg, #07141d 0%, #09202c 34%, rgba(7, 20, 29, .82) 46%, rgba(7, 20, 29, .08) 70%, rgba(7, 20, 29, .12) 100%), linear-gradient(0deg, rgba(7, 20, 29, .55), transparent 35%); pointer-events: none; }
+.esceniq-home-hero__veil { position: absolute; inset: 0; background: linear-gradient(90deg, var(--esceniq-hero-base) 0%, var(--esceniq-hero-veil) 34%, rgba(7, 20, 29, .82) 46%, rgba(7, 20, 29, .08) 70%, rgba(7, 20, 29, .12) 100%), linear-gradient(0deg, rgba(7, 20, 29, .55), transparent 35%); pointer-events: none; }
 .esceniq-home-hero__content { position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: center; width: min(54%, 620px); min-height: 420px; padding: 2.6rem clamp(1.5rem, 4vw, 4.5rem); }
 .esceniq-home-hero__eyebrow { margin: 0 0 .9rem; color: #69f5f0; font-size: .73rem; font-weight: 800; letter-spacing: .16em; }
 .esceniq-home-hero h1 { max-width: 560px; margin: 0; color: #f5ffff; font-size: clamp(2.4rem, 4.45vw, 4.8rem); line-height: .96; letter-spacing: -.06em; text-wrap: balance; text-shadow: 0 8px 28px rgba(0, 0, 0, .38); }
@@ -43,19 +115,19 @@ _BRAND_STYLES = """
 .st-key-home-real-cta { position: relative; z-index: 3; width: fit-content; margin-top: -6.8rem; margin-left: clamp(1.5rem, 4vw, 4.5rem); }
 .st-key-home-real-cta button { min-height: 48px; padding-inline: 1.55rem; box-shadow: 0 12px 30px rgba(66, 216, 210, .27); }
 .esceniq-capabilities { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 1.2rem 0; overflow: hidden; border: 1px solid rgba(66, 216, 210, .25); border-radius: 15px; background: rgba(66, 216, 210, .18); box-shadow: 0 16px 38px rgba(0, 0, 0, .16); }
-.esceniq-capability { min-height: 154px; padding: 1.2rem 1.1rem; background: linear-gradient(145deg, rgba(16, 37, 49, .98), rgba(8, 22, 31, .98)); transition: transform .22s ease, background .22s ease; }
-.esceniq-capability:hover { transform: translateY(-3px); background: linear-gradient(145deg, rgba(21, 60, 70, .98), rgba(10, 29, 38, .98)); }
+.esceniq-capability { min-height: 154px; padding: 1.2rem 1.1rem; background: linear-gradient(145deg, var(--esceniq-card-start), var(--esceniq-card-end)); transition: transform .22s ease, background .22s ease; }
+.esceniq-capability:hover { transform: translateY(-3px); background: linear-gradient(145deg, var(--esceniq-card-hover-start), var(--esceniq-card-hover-end)); }
 .esceniq-capability__icon { display: grid; width: 39px; height: 39px; place-items: center; margin-bottom: .7rem; border: 1px solid currentColor; border-radius: 11px; color: var(--esceniq-turquoise); font-size: 1.35rem; box-shadow: inset 0 0 18px rgba(66, 216, 210, .13), 0 0 16px rgba(66, 216, 210, .12); }
 .esceniq-capability:nth-child(2) .esceniq-capability__icon { color: var(--esceniq-lime); }
 .esceniq-capability:nth-child(3) .esceniq-capability__icon { color: var(--esceniq-coral); }
-.esceniq-capability h3 { margin: 0; color: #efffff; font-size: 1rem; }
-.esceniq-capability p { margin: .32rem 0 0; color: #abc3c9; font-size: .82rem; line-height: 1.35; }
+.esceniq-capability h3 { margin: 0; color: var(--esceniq-text); font-size: 1rem; }
+.esceniq-capability p { margin: .32rem 0 0; color: var(--esceniq-muted); font-size: .82rem; line-height: 1.35; }
 [data-testid="stVerticalBlockBorderWrapper"] { border-color: var(--esceniq-border); box-shadow: 0 14px 35px rgba(0, 0, 0, .16); transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease; animation: esceniq-reveal .42s ease both; }
 [data-testid="stVerticalBlockBorderWrapper"]:hover { border-color: #3b8490; box-shadow: 0 16px 40px rgba(66, 216, 210, .10); transform: translateY(-2px); }
 [data-testid="stMetric"] { background: var(--esceniq-surface); border: 1px solid var(--esceniq-border); border-radius: 12px; padding: .8rem; }
-[data-testid="stMetricLabel"] { color: #a9c1c8; }
+[data-testid="stMetricLabel"] { color: var(--esceniq-muted); }
 [data-testid="stMetricValue"] { color: var(--esceniq-turquoise); }
-[data-testid="stFileUploader"] { border: 1px dashed #3d7180; border-radius: 12px; padding: .6rem; background: linear-gradient(105deg, #0d1b26 35%, #143140 50%, #0d1b26 65%); background-size: 220% 100%; animation: esceniq-scan 4.5s ease-in-out infinite; }
+[data-testid="stFileUploader"] { border: 1px dashed var(--esceniq-border); border-radius: 12px; padding: .6rem; background: linear-gradient(105deg, var(--esceniq-input) 35%, var(--esceniq-surface-strong) 50%, var(--esceniq-input) 65%); background-size: 220% 100%; animation: esceniq-scan 4.5s ease-in-out infinite; }
 [data-testid="stVideo"] { border: 1px solid #3b8490; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(190, 242, 100, .12), 0 16px 35px rgba(0, 0, 0, .25); }
 [data-testid="stDataFrame"] { border: 1px solid var(--esceniq-border); border-radius: 12px; overflow: hidden; }
 [data-testid="stAlert"] { border-left: 3px solid var(--esceniq-coral); }
@@ -63,7 +135,11 @@ button[kind="primary"] { background: var(--esceniq-turquoise); color: #06232a; b
 button { transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease; }
 button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(66, 216, 210, .16); }
 button[kind="primary"]:hover { background: var(--esceniq-lime); color: #152400; }
-.stCaption { color: #a9c1c8; }
+.stCaption { color: var(--esceniq-muted); }
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input, [data-baseweb="select"] > div, [data-testid="stTextArea"] textarea { background: var(--esceniq-input) !important; color: var(--esceniq-text) !important; border-color: var(--esceniq-border) !important; }
+[data-testid="stDataFrame"], [data-testid="stTable"], [data-testid="stDataEditor"] { background: var(--esceniq-surface); color: var(--esceniq-text); }
+[data-testid="stDataFrame"] * { color: var(--esceniq-text); }
+[data-testid="stAlert"] { background: var(--esceniq-surface-strong); color: var(--esceniq-text); }
 @keyframes esceniq-reveal {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
@@ -96,11 +172,40 @@ button[kind="primary"]:hover { background: var(--esceniq-lime); color: #152400; 
 """
 
 
-def apply_brand_styles(streamlit: Any) -> None:
-    """Aplica exclusivamente CSS estático, sin scripts ni contenido de usuario."""
+def normalize_theme(value: object) -> str:
+    """Normaliza una preferencia externa sin aceptar valores arbitrarios en CSS."""
+    return str(value).casefold() if str(value).casefold() in THEMES else THEME_DARK
+
+
+def resolve_theme(streamlit: Any) -> str:
+    """Recupera el tema de sesión o de la URL para conservarlo tras una recarga."""
+    session_state = streamlit.session_state
+    query_params = getattr(streamlit, "query_params", None)
+    requested_theme = None
+    if query_params is not None:
+        try:
+            requested_theme = query_params.get("theme")
+        except (AttributeError, TypeError):
+            requested_theme = None
+    if isinstance(requested_theme, (tuple, list)):
+        requested_theme = requested_theme[-1] if requested_theme else None
+    if "esceniq_theme" not in session_state:
+        session_state["esceniq_theme"] = normalize_theme(requested_theme)
+    theme = normalize_theme(session_state["esceniq_theme"])
+    session_state["esceniq_theme"] = theme
+    return theme
+
+
+def build_brand_styles(theme: str) -> str:
+    """Compone una única hoja CSS con variables de color para el tema solicitado."""
+    return _BRAND_STYLES.replace("/* ESCENIQ_THEME_VARIABLES */", _THEME_VARIABLES[normalize_theme(theme)])
+
+
+def apply_brand_styles(streamlit: Any, theme: str = THEME_DARK) -> None:
+    """Aplica CSS estático tematizado, sin scripts ni contenido de usuario."""
     render_html = getattr(streamlit, "html", None)
     if render_html is not None:
-        render_html(_BRAND_STYLES)
+        render_html(build_brand_styles(theme))
 
 
 @lru_cache(maxsize=4)
