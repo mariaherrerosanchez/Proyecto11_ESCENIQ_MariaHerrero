@@ -70,6 +70,32 @@ NAVIGATION_LABELS = {
     "Modelos e IA": "✦  Modelos e IA",
     "Configuración": "⚙  Configuración · Próximamente",
 }
+MODEL_INFORMATION_CARDS = (
+    (
+        "EXPERIMENTAL · 1 CLASE · YOLO11N",
+        "Coca-Cola experimental",
+        "Usa un peso local YOLO11n monoclase que acepta exclusivamente `0 = coca-cola` para localizar productos o logotipos de Coca-Cola.",
+        "Es experimental. No hay en el repositorio un artefacto de evaluación independiente verificable, por lo que no se muestran métricas ni se garantiza su comportamiento en películas o series.",
+    ),
+    (
+        "EXPERIMENTAL · 1 CLASE · YOLO11N",
+        "Eggo experimental",
+        "Usa un peso local específico para la única clase `0 = eggo`; permite revisar detecciones y una estimación temporal de Eggo.",
+        "Presenta falsos positivos observados, incluso de confianza alta. El piloto documentado obtuvo resultados débiles en test y no debe considerarse un detector validado.",
+    ),
+    (
+        "DIAGNÓSTICO · SIN MARCAS",
+        "Prueba técnica",
+        "Ejecuta el detector con sus clases originales para comprobar cajas, confianza y comportamiento técnico.",
+        "No identifica marcas ESCENIQ ni calcula exposición comercial; sus clases no se deben interpretar como resultados de marca.",
+    ),
+    (
+        "OBJETIVO · 5 CLASES",
+        "ESCENIQ multiclase",
+        "El catálogo objetivo reúne Eggo, Coca-Cola, Pepsi, FedEx y Wilson; Coca-Cola incluye Coke y New Coke, y Wilson su logotipo o W inequívoca.",
+        "Todavía no existe un peso multiclase completo entrenado y evaluado. La validación del catálogo no afirma que haya un modelo oficial disponible.",
+    ),
+)
 
 
 def format_duration(seconds: float) -> str:
@@ -624,43 +650,69 @@ def render_unavailable_page(section_name: str, detail: str = "") -> None:
     st.info(message)
 
 
+def render_models_methodology() -> None:
+    """Explica metodología y límites reales sin presentar controles no disponibles."""
+    st.subheader("Cómo se analiza una escena")
+    with st.container(border=True):
+        st.write(
+            "YOLO examina los fotogramas muestreados y devuelve cajas delimitadoras, una clase y una confianza. "
+            "ESCENIQ normaliza las clases aceptadas por el modo, agrupa las muestras positivas por marca y conserva "
+            "las detecciones para su revisión visual."
+        )
+        st.caption("La detección es automática. La aplicación no verifica por sí sola si una caja corresponde realmente a una marca.")
+
+    st.subheader("Cómo leer los resultados")
+    metric_columns = st.columns(2)
+    with metric_columns[0]:
+        with st.container(border=True):
+            st.caption("DETECCIÓN Y MUESTREO")
+            st.write("**Detecciones**: cajas encontradas. **Muestras positivas**: instantes muestreados con al menos una detección de esa marca.")
+            st.write("**Apariciones estimadas**: grupos de muestras positivas separados por huecos temporales.")
+    with metric_columns[1]:
+        with st.container(border=True):
+            st.caption("EXPOSICIÓN ESTIMADA")
+            st.write("**Exposición estimada**: segundos representados por las muestras positivas, sin duplicar cajas de una misma marca.")
+            st.write("**Porcentaje de exposición**: exposición estimada dividida entre la duración del vídeo. Es una aproximación, no una medición continua.")
+
+    st.subheader("Parámetros que cambian la lectura")
+    parameter_columns = st.columns(2)
+    with parameter_columns[0]:
+        with st.container(border=True):
+            st.caption("UMBRAL DE CONFIANZA")
+            st.write("Un umbral más alto muestra menos cajas y puede reducir falsos positivos, pero también ocultar detecciones reales. No corrige por sí solo un modelo sesgado.")
+    with parameter_columns[1]:
+        with st.container(border=True):
+            st.caption("INTERVALO DE MUESTREO")
+            st.write("Un intervalo menor revisa más fotogramas y puede captar apariciones breves; uno mayor acelera el análisis, pero puede omitirlas o aproximar peor su duración.")
+
+    st.subheader("Evaluación y límites")
+    with st.container(border=True):
+        st.write(
+            "Una evaluación fiable debe separar vídeos, campañas o fuentes antes de entrenar, reservar un test independiente y no usarlo para ajustar el modelo. "
+            "El piloto Eggo documentado se dividió por imagen y no garantiza independencia de fuente; su test ya se usó para diagnóstico y no debe emplearse para seleccionar otro modelo."
+        )
+        st.write(
+            "La iluminación, el desenfoque, la escala, las oclusiones, el texto, los fondos y los encuadres cinematográficos pueden causar falsos positivos o falsos negativos. "
+            "Los resultados requieren revisión humana, especialmente en los modos experimentales."
+        )
+        st.caption("No se muestran métricas de Coca-Cola: no hay una ejecución de evaluación independiente documentada en este repositorio.")
+
+
 def render_models_page() -> None:
-    render_page_intro(
+    render_cinematic_header(
         st,
         "Modelos e IA",
-        "Los detectores se ejecutan localmente y sus resultados deben interpretarse según el modo elegido.",
+        "Conoce qué detector se ejecuta, qué puede medir y qué límites deben guiar la interpretación de cada escena.",
+        str(FAVICON_PATH),
+        eyebrow="ESCENIQ · METODOLOGÍA Y TRANSPARENCIA",
+        asset_width=142,
     )
-    st.caption("MODOS DISPONIBLES")
+    st.caption("MODOS DE ANÁLISIS DISPONIBLES")
     render_information_cards(
         st,
-        (
-            (
-                "CATÁLOGO OFICIAL",
-                "ESCENIQ oficial",
-                "Acepta exclusivamente pesos que expongan las cinco clases oficiales de ESCENIQ.",
-                "Esta pantalla no afirma que existan pesos oficiales entrenados ni métricas de rendimiento.",
-            ),
-            (
-                "EXPERIMENTAL · 1 CLASE",
-                "Eggo experimental",
-                "Analiza únicamente la clase Eggo y presenta la exposición como una estimación experimental.",
-                "Se han observado falsos positivos; una ausencia no prueba que el vídeo no contenga otras marcas.",
-            ),
-            (
-                "EXPERIMENTAL · 1 CLASE",
-                "Coca-Cola experimental",
-                "Analiza únicamente la clase Coca-Cola mediante pesos locales seleccionados por la persona usuaria.",
-                "Puede producir falsos positivos y no informa sobre marcas ajenas a su única clase.",
-            ),
-            (
-                "DIAGNÓSTICO",
-                "Prueba técnica",
-                "Conserva las clases originales que el modelo expone para revisar un comportamiento técnico.",
-                "No atribuye esas clases a marcas ESCENIQ ni calcula exposición comercial.",
-            ),
-        ),
+        MODEL_INFORMATION_CARDS,
     )
-    st.caption("La metodología completa, datasets y evaluación pertenecen a US-014 y no se presentan como implementados aquí.")
+    render_models_methodology()
 
 
 def render_page(page_name: str) -> None:
