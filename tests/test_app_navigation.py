@@ -62,6 +62,8 @@ class FakeStreamlit:
         self.html_fragments = []
         self.page_config = None
         self.container_calls = []
+        self.writes = []
+        self.captions = []
 
     def set_page_config(self, **kwargs):
         self.page_config = kwargs
@@ -72,8 +74,8 @@ class FakeStreamlit:
     def title(self, *_args, **_kwargs):
         pass
 
-    def caption(self, *_args, **_kwargs):
-        pass
+    def caption(self, value, *_args, **_kwargs):
+        self.captions.append(value)
 
     def header(self, *_args, **_kwargs):
         pass
@@ -81,8 +83,8 @@ class FakeStreamlit:
     def subheader(self, *_args, **_kwargs):
         pass
 
-    def write(self, *_args, **_kwargs):
-        pass
+    def write(self, value, *_args, **_kwargs):
+        self.writes.append(value)
 
     def markdown(self, *_args, **_kwargs):
         pass
@@ -214,20 +216,47 @@ class NavigationTests(unittest.TestCase):
 
         self.assertEqual(fake_streamlit.infos, ["No disponible todavía. Requiere implementar US-010."])
 
-    def test_models_page_describes_the_four_modes_without_claiming_metrics(self):
+    def test_models_page_describes_the_four_modes_without_claiming_validation(self):
         fake_streamlit = FakeStreamlit()
 
-        with patch.object(app, "st", fake_streamlit), patch.object(app, "render_information_cards") as cards:
+        with (
+            patch.object(app, "st", fake_streamlit),
+            patch.object(app, "render_cinematic_header") as header,
+            patch.object(app, "render_information_cards") as cards,
+            patch.object(app, "render_models_methodology") as methodology,
+        ):
             app.render_models_page()
 
         displayed_cards = cards.call_args.args[1]
         self.assertEqual([card[1] for card in displayed_cards], [
-            "ESCENIQ oficial",
-            "Eggo experimental",
             "Coca-Cola experimental",
+            "Eggo experimental",
             "Prueba técnica",
+            "ESCENIQ multiclase",
         ])
-        self.assertIn("no afirma", displayed_cards[0][3])
+        self.assertIn("No hay en el repositorio", displayed_cards[0][3])
+        self.assertIn("Todavía no existe", displayed_cards[3][3])
+        header.assert_called_once()
+        methodology.assert_called_once()
+
+    def test_model_descriptions_keep_cocacola_metrics_and_multiclass_weight_pending(self):
+        cocacola_card, _, _, multiclase_card = app.MODEL_INFORMATION_CARDS
+
+        self.assertIn("no se muestran métricas", cocacola_card[3])
+        self.assertIn("Todavía no existe un peso multiclase", multiclase_card[3])
+
+    def test_models_methodology_explains_metrics_parameters_and_human_review(self):
+        fake_streamlit = FakeStreamlit()
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_models_methodology()
+
+        rendered_text = " ".join(fake_streamlit.writes + fake_streamlit.captions)
+        self.assertIn("Detecciones", rendered_text)
+        self.assertIn("Muestras positivas", rendered_text)
+        self.assertIn("Un umbral más alto", rendered_text)
+        self.assertIn("revisión humana", rendered_text)
+        self.assertIn("No se muestran métricas de Coca-Cola", rendered_text)
 
     def test_router_maps_every_page_to_a_working_renderer(self):
         with (

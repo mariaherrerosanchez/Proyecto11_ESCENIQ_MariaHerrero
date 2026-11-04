@@ -21,6 +21,10 @@ La aplicación separa cuatro modos de inferencia:
 - **Coca-Cola experimental (1 clase):** acepta exclusivamente el mapa `0=coca-cola`. Sugiere una ruta local editable al peso piloto de Coca-Cola; su identificador `0` es propio de este peso y **no** cambia el catálogo oficial, donde Coca-Cola es `1=coca_cola`. Es un detector experimental con falsos positivos observados; sus estimaciones no son adecuadas para uso comercial y no detectar Coca-Cola no permite afirmar que no aparezca en el vídeo.
 - **ESCENIQ (cinco marcas oficiales):** exige exactamente `0=eggo`, `1=coca_cola`, `2=pepsi`, `3=fedex`, `4=wilson`. Si no coincide, la ejecución se detiene antes de procesar el vídeo.
 
+## Modelos e IA
+
+La sección **Modelos e IA** distingue los detectores experimentales de los validados: Coca-Cola y Eggo son pilotos monoclase locales; la prueba técnica no identifica marcas; el catálogo multiclase de cinco marcas es un objetivo y no declara un peso completo entrenado. La pantalla explica YOLO, las métricas de detección y exposición, el efecto del umbral y del muestreo, y las limitaciones de falsos positivos, falsos negativos e iluminación. No muestra métricas de Coca-Cola porque el repositorio no contiene una evaluación independiente verificable de ese piloto.
+
 ## Evidencias visuales
 
 Al terminar un análisis, la misma pantalla muestra una galería de hasta 24 fotogramas positivos distribuidos temporalmente a lo largo del vídeo. Un **umbral visual de confianza**, cuyo mínimo es el umbral usado en la inferencia, permite ocultar cajas de baja confianza sin cambiar las detecciones, métricas ni exposición originales. También puede ocultarse el texto de las etiquetas. Cada evidencia muestra un resumen compacto con timestamp, número de cajas visibles y estado de revisión.
