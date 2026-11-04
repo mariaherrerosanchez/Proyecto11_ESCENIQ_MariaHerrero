@@ -17,14 +17,14 @@ La pantalla **Analizar vídeo** valida localmente un MP4, muestra sus metadatos 
 ## Funcionalidades implementadas
 
 - Carga local de MP4, validación, inferencia YOLO por muestreo y estados de error claros.
-- Evidencias visuales reales, exposición estimada por marca, Resultados y CSV para filas reales.
+- Evidencias visuales reales, exposición estimada por marca, línea temporal de tramos aproximados, Resultados y CSV para filas reales.
 - Persistencia local en SQLite, Biblioteca de análisis y JPEGs anotados recuperables.
 - Navegación, documentación de modelos y cuatro modos: técnico, Eggo experimental, Coca-Cola experimental y validación estricta del catálogo oficial.
 
 ## Funcionalidades pendientes
 
 - No hay pesos multiclase completos ni evaluación independiente para las cinco marcas oficiales.
-- Informes, Configuración, línea temporal y comparación de análisis no están implementados.
+- Informes, Configuración y comparación de análisis no están implementados.
 - No hay entrenamiento, reentrenamiento ni verificación humana automática desde Streamlit.
 
 ## Tema visual
@@ -63,6 +63,10 @@ Todas las evidencias indican **«Detección automática — sin verificar»**. E
 ## Estimación de exposición
 
 El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ESCENIQ y de los modos experimentales de Eggo y Coca-Cola, pero rechaza la prueba técnica. Cada muestra positiva representa el intervalo desde su timestamp hasta el timestamp más el intervalo configurado, limitado por la duración real del vídeo. Los intervalos solapados de una misma marca se fusionan; un hueco entre ellos inicia otra aparición. Por ello son estimaciones dependientes del muestreo, no una medición continua exacta. Las marcas simultáneas se calculan de forma independiente y sus porcentajes pueden sumar más de 100 %.
+
+## Línea temporal de apariciones
+
+**Resultados** muestra por marca los tramos aproximados derivados de los timestamps de las muestras positivas: inicio, final y duración estimada. Los tramos usan el mismo intervalo de muestreo y el mismo límite de duración del vídeo que la exposición; no recalculan ni cambian sus métricas y no prueban presencia continua entre dos fotogramas analizados. Los análisis históricos recuperados desde **Biblioteca** muestran la misma línea temporal si SQLite conserva detecciones, duración e intervalo válidos.
 
 ## Persistencia local
 

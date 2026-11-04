@@ -20,7 +20,7 @@ from esceniq.vision import (
     experimental_brand_name,
 )
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
-from esceniq.analytics import ExposureError, calculate_exposure
+from esceniq.analytics import ExposureError, TimelineError, build_appearance_intervals, calculate_exposure
 from esceniq.reports import build_results_csv, build_stored_results_csv
 from esceniq.storage import (
     EvidenceFileStore,
@@ -32,6 +32,7 @@ from esceniq.ui import (
     apply_brand_styles,
     render_capability_showcase,
     render_cinematic_header,
+    render_brand_timeline,
     render_empty_state,
     render_information_cards,
     render_home_cinematic_hero,
@@ -227,6 +228,25 @@ def persist_analysis_evidences(analysis_id: str, result) -> None:
 def render_inference_error(error: Exception) -> None:
     """Muestra un fallo de inferencia, distinto de un análisis vacío."""
     st.error(str(error))
+
+
+def render_detection_timeline(detections, *, duration_seconds: float, sample_interval_seconds: float) -> None:
+    """Construye la línea temporal desde detecciones actuales o recuperadas, sin inferencia."""
+    try:
+        intervals = build_appearance_intervals(
+            detections,
+            duration_seconds=duration_seconds,
+            sample_interval_seconds=sample_interval_seconds,
+        )
+    except TimelineError as error:
+        st.info(f"No se puede mostrar la línea temporal de este análisis. {error}")
+        return
+    render_brand_timeline(
+        st,
+        intervals,
+        duration_seconds=duration_seconds,
+        sample_interval_seconds=sample_interval_seconds,
+    )
 
 
 def render_inference_result(result, *, exposure=None):
@@ -581,6 +601,14 @@ def render_results_page() -> None:
                 ),
             )
     exposure = render_inference_result(result)
+    if metadata is None:
+        st.info("No se puede mostrar la línea temporal porque faltan metadatos temporales del análisis.")
+    else:
+        render_detection_timeline(
+            result.detections,
+            duration_seconds=metadata.duration_seconds,
+            sample_interval_seconds=result.sample_interval_seconds,
+        )
     if exposure is not None and exposure.metrics:
         render_csv_download(result, exposure)
 
@@ -628,6 +656,12 @@ def render_library_analysis(analysis) -> None:
         render_stored_csv_download(analysis)
     else:
         st.info("Este análisis no contiene métricas de exposición por marca.")
+
+    render_detection_timeline(
+        analysis.detections,
+        duration_seconds=analysis.duration_seconds,
+        sample_interval_seconds=analysis.sample_interval_seconds,
+    )
 
     st.subheader("Detecciones guardadas")
     if analysis.detections:
