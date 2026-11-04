@@ -18,6 +18,7 @@ class FakeStreamlit:
         self.infos = []
         self.errors = []
         self.dataframes = []
+        self.downloads = []
         self.session_state = {}
 
     def columns(self, count):
@@ -37,6 +38,9 @@ class FakeStreamlit:
 
     def error(self, value, *_args, **_kwargs):
         self.errors.append(value)
+
+    def download_button(self, label, **kwargs):
+        self.downloads.append((label, kwargs))
 
 
 class InferenceResultRenderingTests(unittest.TestCase):
@@ -143,6 +147,32 @@ class InferenceResultRenderingTests(unittest.TestCase):
         self.assertNotIn("inference_result_key", fake_streamlit.session_state)
         self.assertEqual(fake_streamlit.errors, ["fallo de inferencia"])
         self.assertEqual(fake_streamlit.infos, [])
+
+    @patch.object(app, "build_results_csv")
+    def test_csv_download_uses_real_result_and_current_video_name(self, build_results_csv):
+        build_results_csv.return_value = b"csv-real"
+        fake_streamlit = FakeStreamlit()
+        fake_streamlit.session_state["analysis_video_name"] = "escena.mp4"
+        result = self.result(InferenceMode.ESCENIQ)
+        exposure = object()
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_csv_download(result, exposure)
+
+        build_results_csv.assert_called_once_with(
+            result, exposure, video_name="escena.mp4"
+        )
+        self.assertEqual(fake_streamlit.downloads[0][0], "Descargar CSV")
+        self.assertEqual(fake_streamlit.downloads[0][1]["data"], b"csv-real")
+
+    @patch.object(app, "build_results_csv", return_value=None)
+    def test_csv_download_is_not_offered_when_there_are_no_exportable_rows(self, _build_results_csv):
+        fake_streamlit = FakeStreamlit()
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_csv_download(self.result(InferenceMode.ESCENIQ), object())
+
+        self.assertEqual(fake_streamlit.downloads, [])
 
 
 if __name__ == "__main__":

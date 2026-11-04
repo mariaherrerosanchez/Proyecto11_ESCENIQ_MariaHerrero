@@ -33,6 +33,10 @@ Todas las evidencias indican **«Detección automática — sin verificar»**. E
 
 El servicio `esceniq.analytics.calculate_exposure` acepta resultados del modo ESCENIQ y de los modos experimentales de Eggo y Coca-Cola, pero rechaza la prueba técnica. Cada muestra positiva representa el intervalo desde su timestamp hasta el timestamp más el intervalo configurado, limitado por la duración real del vídeo. Los intervalos solapados de una misma marca se fusionan; un hueco entre ellos inicia otra aparición. Por ello son estimaciones dependientes del muestreo, no una medición continua exacta. Las marcas simultáneas se calculan de forma independiente y sus porcentajes pueden sumar más de 100 %.
 
+## Exportación CSV
+
+En **Resultados**, un análisis con marcas agregadas ofrece **Descargar CSV**. El archivo usa UTF-8 con BOM y separador `;` para abrirse correctamente en Excel en español. Incluye por marca el vídeo seleccionado, detecciones, muestras positivas, exposición estimada, porcentaje, apariciones, modelo, umbral e intervalo de muestreo. La descarga reutiliza el resultado actual y su exposición ya calculada; no vuelve a ejecutar YOLO. Si no existen marcas agregadas o se trata de una prueba técnica, no se ofrece CSV.
+
 ## Piloto de entrenamiento Eggo
 
 El procedimiento, resultados y limitaciones del piloto de una sola clase están documentados en [la documentación del experimento](docs/datasets/eggo_training_pilot.md). Sus pesos y datos se mantienen fuera del repositorio. Este piloto **no** cumple aún el requisito del modelo oficial ESCENIQ de cinco marcas ni permite concluir que otras marcas estén ausentes de un vídeo.

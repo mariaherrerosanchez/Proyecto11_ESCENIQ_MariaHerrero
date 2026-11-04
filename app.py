@@ -21,6 +21,7 @@ from esceniq.vision import (
 )
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
+from esceniq.reports import build_results_csv
 from esceniq.ui import (
     apply_brand_styles,
     render_capability_showcase,
@@ -153,7 +154,8 @@ def render_inference_error(error: Exception) -> None:
     st.error(str(error))
 
 
-def render_inference_result(result) -> None:
+def render_inference_result(result, *, exposure=None):
+    """Presenta un resultado y devuelve la exposición ya agregada cuando aplica."""
     experimental_brand = experimental_brand_name(result.mode)
     st.subheader("Resumen del análisis")
     render_metric_cards(
@@ -169,8 +171,9 @@ def render_inference_result(result) -> None:
     render_evidence_gallery(result)
     if result.mode is InferenceMode.TECHNICAL_TEST:
         st.info("Resultado de prueba técnica: las clases se conservan tal como las expone el modelo y no son marcas ESCENIQ.")
-        return
-    exposure = calculate_exposure(result)
+        return None
+    if exposure is None:
+        exposure = calculate_exposure(result)
     if not exposure.metrics:
         if experimental_brand is not None:
             st.info(
@@ -179,7 +182,7 @@ def render_inference_result(result) -> None:
             )
         else:
             st.info("El análisis terminó correctamente sin detecciones de marcas.")
-        return
+        return exposure
     st.subheader("Exposición estimada por marca")
     if experimental_brand is not None:
         st.caption(
@@ -201,6 +204,25 @@ def render_inference_result(result) -> None:
         ],
         hide_index=True,
         use_container_width=True,
+    )
+    return exposure
+
+
+def render_csv_download(result, exposure) -> None:
+    """Ofrece el informe local solo cuando la agregación contiene filas reales."""
+    csv_data = build_results_csv(
+        result,
+        exposure,
+        video_name=st.session_state.get("analysis_video_name"),
+    )
+    if csv_data is None:
+        return
+    st.download_button(
+        "Descargar CSV",
+        data=csv_data,
+        file_name="esceniq_resultados.csv",
+        mime="text/csv",
+        help="CSV UTF-8 para Excel, separado por punto y coma.",
     )
 
 
@@ -263,6 +285,7 @@ def render_analysis_page() -> None:
         st.error("El archivo seleccionado está vacío.")
         return
     video_digest = sha256(contents).hexdigest()
+    st.session_state["analysis_video_name"] = uploaded_video.name
     if st.session_state.get("analysis_video_digest") != video_digest:
         st.session_state["analysis_video_digest"] = video_digest
         st.session_state.pop("inference_result", None)
@@ -416,7 +439,9 @@ def render_results_page() -> None:
                     ("Muestreo", f"Cada {result.sample_interval_seconds:g} s"),
                 ),
             )
-    render_inference_result(result)
+    exposure = render_inference_result(result)
+    if exposure is not None and exposure.metrics:
+        render_csv_download(result, exposure)
 
 
 def render_unavailable_page(section_name: str, detail: str = "") -> None:

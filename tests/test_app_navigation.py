@@ -1,5 +1,6 @@
 import unittest
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import app
@@ -181,11 +182,29 @@ class NavigationTests(unittest.TestCase):
         previous_result = object()
         fake_streamlit.session_state["inference_result"] = previous_result
 
-        with patch.object(app, "st", fake_streamlit), patch.object(app, "render_inference_result") as render_result:
+        with (
+            patch.object(app, "st", fake_streamlit),
+            patch.object(app, "render_inference_result", return_value=None) as render_result,
+            patch.object(app, "render_csv_download") as render_csv_download,
+        ):
             app.render_results_page()
 
         render_result.assert_called_once_with(previous_result)
+        render_csv_download.assert_not_called()
         self.assertIs(fake_streamlit.session_state["inference_result"], previous_result)
+
+    def test_results_page_hides_csv_download_when_exposure_has_no_rows(self):
+        fake_streamlit = FakeStreamlit()
+        fake_streamlit.session_state["inference_result"] = object()
+
+        with (
+            patch.object(app, "st", fake_streamlit),
+            patch.object(app, "render_inference_result", return_value=SimpleNamespace(metrics=())),
+            patch.object(app, "render_csv_download") as render_csv_download,
+        ):
+            app.render_results_page()
+
+        render_csv_download.assert_not_called()
 
     def test_unavailable_pages_identify_their_pending_status(self):
         fake_streamlit = FakeStreamlit()
