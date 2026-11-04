@@ -21,7 +21,7 @@ from esceniq.vision import (
 )
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
 from esceniq.analytics import ExposureError, calculate_exposure
-from esceniq.reports import build_results_csv
+from esceniq.reports import build_results_csv, build_stored_results_csv
 from esceniq.storage import SqliteAnalysisRepository, StorageError
 from esceniq.ui import (
     apply_brand_styles,
@@ -65,7 +65,7 @@ NAVIGATION_LABELS = {
     "Inicio": "⌂  Inicio",
     "Analizar vídeo": "◉  Analizar vídeo",
     "Resultados": "▦  Resultados",
-    "Biblioteca": "▣  Biblioteca · Próximamente",
+    "Biblioteca": "▣  Biblioteca",
     "Informes": "↗  Informes · Próximamente",
     "Modelos e IA": "✦  Modelos e IA",
     "Configuración": "⚙  Configuración · Próximamente",
@@ -237,6 +237,21 @@ def render_csv_download(result, exposure) -> None:
         file_name="esceniq_resultados.csv",
         mime="text/csv",
         help="CSV UTF-8 para Excel, separado por punto y coma.",
+    )
+
+
+def render_stored_csv_download(analysis) -> None:
+    """Ofrece el mismo CSV para un análisis real recuperado de SQLite."""
+    csv_data = build_stored_results_csv(analysis)
+    if csv_data is None:
+        return
+    st.download_button(
+        "Descargar CSV",
+        data=csv_data,
+        file_name="esceniq_resultados_guardados.csv",
+        mime="text/csv",
+        help="CSV UTF-8 para Excel, separado por punto y coma.",
+        key=f"library_csv_{analysis.analysis_id}",
     )
 
 
@@ -447,7 +462,7 @@ def render_results_page() -> None:
                 st.subheader("Aún no hay una escena analizada")
                 st.write("Cuando completes un análisis, aquí aparecerán únicamente sus métricas, parámetros y evidencias reales.")
                 st.button("Analizar vídeo", type="primary", key="results_analyze_video", on_click=navigate_to, args=("Analizar vídeo",))
-                st.caption("El historial estará disponible en Biblioteca cuando se implemente US-010.")
+                st.caption("Los análisis persistidos pueden consultarse desde Biblioteca.")
         st.info("Todavía no hay un análisis disponible. Carga un vídeo y ejecuta la inferencia desde Analizar vídeo.")
         return
     metadata = getattr(result, "video_metadata", None)
@@ -467,6 +482,132 @@ def render_results_page() -> None:
     exposure = render_inference_result(result)
     if exposure is not None and exposure.metrics:
         render_csv_download(result, exposure)
+
+
+def _library_option_label(item) -> str:
+    """Resume una entrada de historial sin exponer su ruta local completa."""
+    created_at = item.created_at.astimezone().strftime("%d/%m/%Y %H:%M")
+    return f"{created_at} · {item.video_name} · {item.mode} · {item.detection_count} detecciones"
+
+
+def render_library_analysis(analysis) -> None:
+    """Presenta datos persistidos; las evidencias no se guardan en SQLite todavía."""
+    st.subheader("Detalle del análisis guardado")
+    st.caption(f"ID: {analysis.analysis_id} · Completado: {analysis.created_at.astimezone().strftime('%d/%m/%Y %H:%M')}")
+    render_metric_cards(
+        st,
+        (
+            ("Detecciones", len(analysis.detections)),
+            ("Fotogramas analizados", analysis.analyzed_frame_count),
+            ("Duración", format_duration(analysis.duration_seconds)),
+            ("Marcas con exposición", len(analysis.exposures)),
+        ),
+    )
+    st.caption(
+        f"Vídeo: {analysis.video_name} · Modo: {analysis.mode} · Modelo: {analysis.model_path} · "
+        f"Umbral: {analysis.confidence_threshold:.0%} · Intervalo: {analysis.sample_interval_seconds:g} s"
+    )
+
+    st.subheader("Exposición por marca")
+    if analysis.exposures:
+        st.dataframe(
+            [
+                {
+                    "Marca": metric.brand_name,
+                    "Muestras positivas": metric.positive_sample_count,
+                    "Exposición estimada (s)": round(metric.estimated_seconds, 2),
+                    "Vídeo (%)": round(metric.percentage_of_video, 2),
+                    "Apariciones": metric.appearance_count,
+                }
+                for metric in analysis.exposures
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+        render_stored_csv_download(analysis)
+    else:
+        st.info("Este análisis no contiene métricas de exposición por marca.")
+
+    st.subheader("Detecciones guardadas")
+    if analysis.detections:
+        st.dataframe(
+            [
+                {
+                    "Tiempo": format_duration(detection.timestamp_seconds),
+                    "Fotograma": detection.frame_index,
+                    "Clase": detection.class_name,
+                    "Marca": detection.brand_name or "—",
+                    "Confianza": f"{detection.confidence:.0%}",
+                }
+                for detection in analysis.detections
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.info("El análisis se guardó correctamente sin detecciones.")
+    st.caption("Las evidencias visuales no se guardan en SQLite; no se reconstruyen ni se simulan desde el historial.")
+
+
+def render_library_page() -> None:
+    """Consulta el historial SQLite sin modificar el análisis activo de la sesión."""
+    render_cinematic_header(
+        st,
+        "Biblioteca de análisis",
+        "Recupera análisis completados localmente sin repetir la inferencia ni alterar sus métricas.",
+        str(FAVICON_PATH),
+        eyebrow="ESCENIQ · ARCHIVO LOCAL",
+        asset_width=142,
+    )
+    try:
+        repository = SqliteAnalysisRepository()
+        analyses = repository.list_analyses()
+    except StorageError as error:
+        st.error(f"No se pudo leer la biblioteca local. El análisis actual de la sesión no se ha modificado. Detalle: {error}")
+        return
+
+    if not analyses:
+        render_empty_state(
+            st,
+            "La biblioteca está vacía",
+            "Los análisis completados aparecerán aquí automáticamente después de guardarse en SQLite.",
+            detail="No hay resultados simulados ni se ejecutará una inferencia desde esta pantalla.",
+        )
+        return
+
+    st.caption("HISTORIAL · ORDENADO DEL MÁS RECIENTE AL MÁS ANTIGUO")
+    st.dataframe(
+        [
+            {
+                "Fecha": item.created_at.astimezone().strftime("%d/%m/%Y %H:%M"),
+                "Vídeo": item.video_name,
+                "Estado": "Completado",
+                "Modo": item.mode,
+                "Modelo": Path(item.model_path).name,
+                "Detecciones": item.detection_count,
+            }
+            for item in analyses
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+    selected_id = st.selectbox(
+        "Abrir análisis guardado",
+        options=tuple(item.analysis_id for item in analyses),
+        format_func=lambda analysis_id: _library_option_label(
+            next(item for item in analyses if item.analysis_id == analysis_id)
+        ),
+        key="library_analysis_id",
+    )
+    try:
+        analysis = repository.get_analysis(selected_id)
+    except StorageError as error:
+        st.error(f"No se pudo abrir el análisis seleccionado. Detalle: {error}")
+        return
+    if analysis is None:
+        st.warning("El análisis seleccionado ya no está disponible en la biblioteca. Actualiza la lista para continuar.")
+        return
+    render_library_analysis(analysis)
 
 
 def render_unavailable_page(section_name: str, detail: str = "") -> None:
@@ -527,7 +668,7 @@ def render_page(page_name: str) -> None:
         "Inicio": render_home_page,
         "Analizar vídeo": render_analysis_page,
         "Resultados": render_results_page,
-        "Biblioteca": lambda: render_unavailable_page("Biblioteca", "Requiere implementar US-010."),
+        "Biblioteca": render_library_page,
         "Informes": lambda: render_unavailable_page("Informes"),
         "Modelos e IA": render_models_page,
         "Configuración": lambda: render_unavailable_page("Configuración"),
