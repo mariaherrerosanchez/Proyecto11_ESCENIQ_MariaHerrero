@@ -143,6 +143,53 @@ class LibraryPageTests(unittest.TestCase):
             ["Este análisis histórico no tiene evidencias visuales guardadas."],
         )
 
+    def test_comparison_requires_two_saved_analyses_without_running_yolo(self):
+        fake_streamlit = FakeStreamlit()
+
+        with patch.object(app, "st", fake_streamlit), patch.object(app, "analyze_video") as analyze_video:
+            app.render_library_comparison(FakeRepository(), (self.item(),))
+
+        self.assertEqual(fake_streamlit.infos, ["Necesitas al menos dos análisis guardados para compararlos."])
+        analyze_video.assert_not_called()
+
+    def test_comparison_renders_two_saved_analyses_and_keeps_yolo_unused(self):
+        first, second = self.item("analysis-1"), self.item("analysis-2")
+        exposure = SimpleNamespace(
+            brand_name="Coca-Cola",
+            positive_sample_count=2,
+            estimated_seconds=2.0,
+            percentage_of_video=20.0,
+            appearance_count=1,
+        )
+        stored = {
+            first.analysis_id: SimpleNamespace(
+                video_name="primero.mp4", mode="esceniq", model_path="models/esceniq.pt",
+                confidence_threshold=0.25, sample_interval_seconds=1.0, duration_seconds=10.0,
+                exposures=(exposure,),
+            ),
+            second.analysis_id: SimpleNamespace(
+                video_name="segundo.mp4", mode="esceniq", model_path="models/esceniq.pt",
+                confidence_threshold=0.25, sample_interval_seconds=1.0, duration_seconds=10.0,
+                exposures=(exposure,),
+            ),
+        }
+
+        class ComparisonRepository(FakeRepository):
+            def get_analysis(self, analysis_id):
+                return stored[analysis_id]
+
+        fake_streamlit = FakeStreamlit()
+        with patch.object(app, "st", fake_streamlit), patch.object(app, "analyze_video") as analyze_video:
+            app.render_library_comparison(ComparisonRepository(), (first, second))
+
+        self.assertEqual(len(fake_streamlit.dataframes), 2)
+        self.assertEqual(fake_streamlit.dataframes[1][0]["Marca"], "Coca-Cola")
+        self.assertEqual(fake_streamlit.dataframes[1][0]["Métrica"], "Apariciones")
+        self.assertEqual(fake_streamlit.dataframes[1][0]["Análisis A"], 1)
+        self.assertEqual(fake_streamlit.dataframes[1][2]["Métrica"], "Vídeo (%)")
+        self.assertEqual(fake_streamlit.dataframes[1][1]["Mayor exposición estimada"], "Igual exposición estimada")
+        analyze_video.assert_not_called()
+
     @patch.object(app, "build_stored_results_csv", return_value=b"csv-guardado")
     def test_saved_analysis_csv_reuses_the_persisted_data(self, build_csv):
         fake_streamlit = FakeStreamlit()

@@ -20,7 +20,13 @@ from esceniq.vision import (
     experimental_brand_name,
 )
 from esceniq.vision.evidence import render_evidence_jpeg, visible_detections
-from esceniq.analytics import ExposureError, TimelineError, build_appearance_intervals, calculate_exposure
+from esceniq.analytics import (
+    ExposureError,
+    TimelineError,
+    build_analysis_comparison,
+    build_appearance_intervals,
+    calculate_exposure,
+)
 from esceniq.reports import build_results_csv, build_stored_results_csv
 from esceniq.storage import (
     EvidenceFileStore,
@@ -619,6 +625,132 @@ def _library_option_label(item) -> str:
     return f"{created_at} · {item.video_name} · {item.mode} · {item.detection_count} detecciones"
 
 
+def _comparison_metric_value(metric, *, field: str, available: bool) -> str | int:
+    """Diferencia ausencia real de marca de una métrica que no se puede interpretar."""
+    if not available:
+        return "No disponible"
+    if metric is None:
+        return "Ausente"
+    value = getattr(metric, field)
+    if field in {"estimated_seconds", "percentage_of_video"}:
+        return round(value, 2)
+    return value
+
+
+def _comparison_duration(seconds: float) -> str:
+    """Evita presentar una duración inválida como dato comparable."""
+    try:
+        return format_duration(seconds) if seconds > 0 else "No disponible"
+    except (TypeError, ValueError):
+        return "No disponible"
+
+
+def render_library_comparison(repository, analyses) -> None:
+    """Compara dos análisis SQLite sin recuperar vídeos ni ejecutar inferencia."""
+    st.subheader("Comparar análisis")
+    if len(analyses) < 2:
+        st.info("Necesitas al menos dos análisis guardados para compararlos.")
+        return
+    by_id = {item.analysis_id: item for item in analyses}
+    left_id = st.selectbox(
+        "Primer análisis",
+        options=tuple(by_id),
+        format_func=lambda analysis_id: _library_option_label(by_id[analysis_id]),
+        key="comparison_left_analysis_id",
+    )
+    right_options = tuple(analysis_id for analysis_id in by_id if analysis_id != left_id)
+    right_id = st.selectbox(
+        "Segundo análisis",
+        options=right_options,
+        format_func=lambda analysis_id: _library_option_label(by_id[analysis_id]),
+        key="comparison_right_analysis_id",
+    )
+    try:
+        left, right = repository.get_analysis(left_id), repository.get_analysis(right_id)
+    except StorageError as error:
+        st.error(f"No se pudieron recuperar los análisis para compararlos. Detalle: {error}")
+        return
+    if left is None or right is None:
+        st.warning("Uno de los análisis seleccionados ya no está disponible. Actualiza la biblioteca para continuar.")
+        return
+
+    comparison = build_analysis_comparison(left, right)
+    left_label = f"Primer análisis · {left.video_name}"
+    right_label = f"Segundo análisis · {right.video_name}"
+    st.caption("CONTEXTO DE LA COMPARACIÓN · MÉTRICAS PERSISTIDAS · SIN NUEVA INFERENCIA")
+    st.dataframe(
+        [
+            {
+                "Campo": "Vídeo",
+                left_label: left.video_name,
+                right_label: right.video_name,
+            },
+            {
+                "Campo": "Duración",
+                left_label: _comparison_duration(left.duration_seconds),
+                right_label: _comparison_duration(right.duration_seconds),
+            },
+            {
+                "Campo": "Modo / modelo",
+                left_label: f"{left.mode} · {Path(left.model_path).name}",
+                right_label: f"{right.mode} · {Path(right.model_path).name}",
+            },
+            {
+                "Campo": "Umbral / muestreo",
+                left_label: f"{left.confidence_threshold:.0%} · {left.sample_interval_seconds:g} s",
+                right_label: f"{right.confidence_threshold:.0%} · {right.sample_interval_seconds:g} s",
+            },
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+    if comparison.configuration_differences:
+        st.warning(
+            "No se comparan las exposiciones como equivalentes porque difieren: "
+            f"{', '.join(comparison.configuration_differences)}. Los valores originales se muestran sin modificarlos."
+        )
+    else:
+        st.caption("Configuraciones compatibles: se puede identificar la mayor exposición estimada por marca.")
+
+    if not comparison.metrics:
+        st.info(
+            "No hay métricas de marca comparables. Puede tratarse de análisis sin detecciones de marca "
+            "o de una prueba técnica, cuyos resultados no son exposición de marca ESCENIQ."
+        )
+        return
+    rows = []
+    for metric in comparison.metrics:
+        if metric.higher_exposure == "left":
+            higher = left.video_name
+        elif metric.higher_exposure == "right":
+            higher = right.video_name
+        elif metric.higher_exposure == "equal":
+            higher = "Igual exposición estimada"
+        elif comparison.configuration_differences:
+            higher = "No comparable"
+        else:
+            higher = "No disponible"
+        for metric_name, field in (
+            ("Apariciones", "appearance_count"),
+            ("Exposición estimada (s)", "estimated_seconds"),
+            ("Vídeo (%)", "percentage_of_video"),
+        ):
+            rows.append(
+                {
+                    "Marca": metric.brand_name,
+                    "Métrica": metric_name,
+                    "Análisis A": _comparison_metric_value(metric.left, field=field, available=metric.left_available),
+                    "Análisis B": _comparison_metric_value(metric.right, field=field, available=metric.right_available),
+                    "Mayor exposición estimada": higher if field == "estimated_seconds" else "—",
+                }
+            )
+    st.caption("Ausente = análisis de marca válido sin detección de esa marca · No disponible = métrica no interpretable.")
+    st.dataframe(rows, hide_index=True, use_container_width=True)
+    st.caption(
+        "Las exposiciones son estimaciones basadas en muestreo; no miden presencia continua ni audiencia."
+    )
+
+
 def render_library_analysis(analysis) -> None:
     """Presenta datos persistidos; las evidencias no se guardan en SQLite todavía."""
     st.subheader("Detalle del análisis guardado")
@@ -753,6 +885,7 @@ def render_library_page() -> None:
         hide_index=True,
         use_container_width=True,
     )
+    render_library_comparison(repository, analyses)
     selected_id = st.selectbox(
         "Abrir análisis guardado",
         options=tuple(item.analysis_id for item in analyses),
