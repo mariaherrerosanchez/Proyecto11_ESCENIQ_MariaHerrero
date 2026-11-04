@@ -37,6 +37,7 @@ from esceniq.ui import (
     render_home_cinematic_hero,
     render_metric_cards,
     render_page_intro,
+    resolve_theme,
 )
 
 MAX_VIDEO_HEIGHT_PX = 480
@@ -318,6 +319,45 @@ def render_stored_csv_download(analysis) -> None:
 def navigate_to(page_name: str) -> None:
     """Cambia de sección sin perder el último resultado guardado en sesión."""
     st.session_state["navigation_page"] = page_name
+
+
+def current_theme() -> str:
+    """Obtiene la preferencia vigente antes de aplicar estilos en cada rerun."""
+    return resolve_theme(st)
+
+
+def _sync_theme_query_parameter(theme: str) -> None:
+    """Conserva la preferencia en la URL cuando Streamlit expone query_params."""
+    query_params = getattr(st, "query_params", None)
+    if query_params is None:
+        return
+    try:
+        if query_params.get("theme") != theme:
+            query_params["theme"] = theme
+    except (AttributeError, TypeError):
+        return
+
+
+def toggle_theme() -> None:
+    """Alterna el tema antes del rerun para evitar aplicar CSS del tema anterior."""
+    next_theme = "light" if current_theme() == "dark" else "dark"
+    st.session_state["esceniq_theme"] = next_theme
+    _sync_theme_query_parameter(next_theme)
+
+
+def render_theme_toggle(theme: str) -> None:
+    """Muestra un control nativo visible en la esquina superior del contenido."""
+    activate_light = theme == "dark"
+    icon = ":material/light_mode:" if activate_light else ":material/dark_mode:"
+    target = "claro" if activate_light else "oscuro"
+    _, control = st.columns((12, 1))
+    with control:
+        st.button(
+            icon,
+            key="theme_toggle_button",
+            help=f"Activar tema {target}",
+            on_click=toggle_theme,
+        )
 
 
 def render_home_page() -> None:
@@ -805,7 +845,9 @@ def render_sidebar_navigation() -> str:
 
 def main() -> None:
     st.set_page_config(page_title="ESCENIQ", page_icon=str(FAVICON_PATH), layout="wide")
-    apply_brand_styles(st)
+    theme = current_theme()
+    apply_brand_styles(st, theme)
+    render_theme_toggle(theme)
     page_name = render_sidebar_navigation()
     render_page(page_name)
 

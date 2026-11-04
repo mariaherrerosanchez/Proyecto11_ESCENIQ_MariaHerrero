@@ -23,7 +23,7 @@ class FakeSidebar:
     def divider(self):
         pass
 
-    def radio(self, label, options, *, format_func, key):
+    def radio(self, label, options, *, format_func=None, key, **_kwargs):
         self.calls.append((label, options, format_func, key))
         return self.selected_page
 
@@ -64,6 +64,7 @@ class FakeStreamlit:
         self.container_calls = []
         self.writes = []
         self.captions = []
+        self.buttons = []
 
     def set_page_config(self, **kwargs):
         self.page_config = kwargs
@@ -92,7 +93,8 @@ class FakeStreamlit:
     def image(self, *_args, **_kwargs):
         pass
 
-    def button(self, *_args, **_kwargs):
+    def button(self, label, **kwargs):
+        self.buttons.append((label, kwargs))
         return False
 
     def divider(self):
@@ -143,7 +145,36 @@ class NavigationTests(unittest.TestCase):
         self.assertNotIn("<script", fake_streamlit.html_fragments[0].lower())
         self.assertIn("prefers-reduced-motion", fake_streamlit.html_fragments[0])
         self.assertEqual(fake_streamlit.page_config["page_icon"], str(app.FAVICON_PATH))
+        self.assertEqual(fake_streamlit.buttons[0][0], ":material/light_mode:")
+        self.assertEqual(fake_streamlit.buttons[0][1]["key"], "theme_toggle_button")
         render_page.assert_called_once_with("Resultados")
+
+    def test_theme_toggle_persists_between_navigation_reruns(self):
+        fake_streamlit = FakeStreamlit()
+        fake_streamlit.query_params = {"theme": "dark"}
+
+        with patch.object(app, "st", fake_streamlit):
+            self.assertEqual(app.current_theme(), "dark")
+            app.toggle_theme()
+            self.assertEqual(app.current_theme(), "light")
+
+        self.assertEqual(fake_streamlit.session_state["esceniq_theme"], "light")
+        self.assertEqual(fake_streamlit.query_params["theme"], "light")
+
+    def test_theme_toggle_is_compact_and_outside_sidebar_navigation(self):
+        fake_streamlit = FakeStreamlit()
+
+        with patch.object(app, "st", fake_streamlit):
+            app.render_theme_toggle("dark")
+            app.render_theme_toggle("light")
+
+        self.assertEqual(fake_streamlit.buttons[0][0], ":material/light_mode:")
+        self.assertEqual(fake_streamlit.buttons[0][1]["help"], "Activar tema claro")
+        self.assertEqual(fake_streamlit.buttons[0][1]["key"], "theme_toggle_button")
+        self.assertEqual(fake_streamlit.buttons[1][0], ":material/dark_mode:")
+        self.assertEqual(fake_streamlit.buttons[1][1]["help"], "Activar tema oscuro")
+        self.assertNotIn("Activar tema", fake_streamlit.buttons[1][0])
+        self.assertEqual(len(fake_streamlit.container_calls), 0)
 
     def test_visual_resources_exist_and_are_used_by_the_navigation(self):
         self.assertTrue(app.SIDEBAR_LOGO_PATH.is_file())
